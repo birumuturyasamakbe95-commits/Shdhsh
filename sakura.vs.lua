@@ -800,16 +800,23 @@ local _lastThemeColor = nil
 
 function applyColorTheme(themeName)
     local color = COLOR_THEMES[themeName]
-    if not color then return end
+    if not color then
+        warn("[Sakura.vs] Unknown theme:", tostring(themeName))
+        return
+    end
     currentColorTheme = themeName
     selectedColor = color
+    _lastThemeColor = nil -- force full UI refresh
     updateAllUIThemeColors(color)
-    saveAllSettings()
+    pcall(function()
+        if type(saveAllSettings) == "function" then saveAllSettings() end
+    end)
 end
 
 function updateAllUIThemeColors(color)
+    if not color then color = getThemeColor() end
     local now = _tick()
-    if color == _lastThemeColor and now - _lastThemeUpdate < 0.1 then return end
+    if color == _lastThemeColor and now - _lastThemeUpdate < 0.05 then return end
     _lastThemeUpdate = now
     _lastThemeColor = color
 
@@ -846,11 +853,31 @@ function updateAllUIThemeColors(color)
         end
     end
     if gui then searchAndUpdateText(gui) end
+    -- Re-color all floating / mobile panel buttons (BAT AIMBOT, ANTI AIMBOT, TP BAT, etc.)
     if tpBatFloatingButton then
-        paintFloatingBtn(tpBatFloatingButton:FindFirstChild("Frame"), batDesyncTpEnabled)
+        paintFloatingBtn(tpBatFloatingButton:FindFirstChild("Frame"), batDesyncTpEnabled == true)
     end
     if batV2FloatingButton then
-        paintFloatingBtn(batV2FloatingButton:FindFirstChild("Frame"), autoBatV2Enabled)
+        paintFloatingBtn(batV2FloatingButton:FindFirstChild("Frame"), autoBatV2Enabled == true)
+    end
+    if antiAimbotFloatingButton then
+        paintFloatingBtn(antiAimbotFloatingButton:FindFirstChild("Frame"), antiAimbotEnabled == true)
+    end
+    if instaResetFloatingButton then
+        paintFloatingBtn(instaResetFloatingButton:FindFirstChild("Frame"), false)
+    end
+    if MobilePanel then
+        local container = MobilePanel:FindFirstChild("FloatingPanel")
+        if container then
+            local btnContainer = container:FindFirstChild("ButtonsContainer")
+            if btnContainer then
+                for _, btn in ipairs(btnContainer:GetChildren()) do
+                    if btn:IsA("TextButton") then
+                        paintFloatingBtn(btn, btn:GetAttribute("MobActive") == true)
+                    end
+                end
+            end
+        end
     end
     for _, tab in ipairs(tabButtons or {}) do
         if tab.TextColor3 == Color3.fromRGB(180, 180, 190) then tab.TextColor3 = color end
@@ -6387,17 +6414,32 @@ function paintFloatingBtn(btnFrame, active)
     local assetBg = btnFrame:FindFirstChild("BtnAssetBg")
     local assetOv = btnFrame:FindFirstChild("BtnAssetOverlay")
     local WHITE = Color3.fromRGB(255, 255, 255)
-    local ORANGE_ON = Color3.fromRGB(255, 140, 0)
-    local ORANGE_OFF = Color3.fromRGB(70, 40, 10)
-    local ORANGE_GLOW = Color3.fromRGB(255, 190, 80)
+    -- Theme-aware colors (Button Color selector)
+    local theme = getThemeColor() or Color3.fromRGB(255, 140, 0)
+    local COLOR_ON = theme
+    local COLOR_OFF = Color3.new(
+        math.clamp(theme.R * 0.28, 0, 1),
+        math.clamp(theme.G * 0.28, 0, 1),
+        math.clamp(theme.B * 0.28, 0, 1)
+    )
+    local COLOR_GLOW = Color3.new(
+        math.clamp(theme.R * 1.25 + 0.05, 0, 1),
+        math.clamp(theme.G * 1.25 + 0.05, 0, 1),
+        math.clamp(theme.B * 1.25 + 0.05, 0, 1)
+    )
+    local COLOR_OFF_TEXT = Color3.new(
+        math.clamp(theme.R * 0.85 + 0.15, 0, 1),
+        math.clamp(theme.G * 0.85 + 0.15, 0, 1),
+        math.clamp(theme.B * 0.85 + 0.15, 0, 1)
+    )
 
     if assetBg then assetBg.Visible = false end
     if assetOv then assetOv.Visible = false end
     if bg then bg.Enabled = false end
 
     if active then
-        -- ON: bright orange fill + thick glow stroke (clearly pressed)
-        btnFrame.BackgroundColor3 = ORANGE_ON
+        -- ON: theme fill + thick glow stroke
+        btnFrame.BackgroundColor3 = COLOR_ON
         btnFrame.BackgroundTransparency = 0
         if label then
             label.TextColor3 = WHITE
@@ -6411,16 +6453,16 @@ function paintFloatingBtn(btnFrame, active)
             btnFrame.TextTransparency = 1
         end
         if stroke then
-            stroke.Color = ORANGE_GLOW
+            stroke.Color = COLOR_GLOW
             stroke.Thickness = 2.6
             stroke.Transparency = 0
         end
     else
-        -- OFF: dark dim orange, thinner stroke
-        btnFrame.BackgroundColor3 = ORANGE_OFF
+        -- OFF: dimmed theme color
+        btnFrame.BackgroundColor3 = COLOR_OFF
         btnFrame.BackgroundTransparency = 0.25
         if label then
-            label.TextColor3 = Color3.fromRGB(255, 200, 140)
+            label.TextColor3 = COLOR_OFF_TEXT
             label.TextTransparency = 0.05
             label.Visible = true
             label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
@@ -6431,9 +6473,9 @@ function paintFloatingBtn(btnFrame, active)
             btnFrame.TextTransparency = 1
         end
         if stroke then
-            stroke.Color = Color3.fromRGB(180, 100, 30)
+            stroke.Color = COLOR_GLOW
             stroke.Thickness = 1.3
-            stroke.Transparency = 0.25
+            stroke.Transparency = 0.35
         end
     end
 end
@@ -10190,17 +10232,24 @@ function buildGui()
     local function animPill(pill, dot, on)
         local stroke = pill:FindFirstChildOfClass("UIStroke")
         local info = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local theme = getThemeColor() or Color3.fromRGB(255, 140, 0)
+        local offPill = Color3.new(theme.R * 0.18, theme.G * 0.18, theme.B * 0.18)
+        local glow = Color3.new(
+            math.clamp(theme.R * 1.2 + 0.05, 0, 1),
+            math.clamp(theme.G * 1.2 + 0.05, 0, 1),
+            math.clamp(theme.B * 1.2 + 0.05, 0, 1)
+        )
         TS:Create(dot, info, {
             Position = on and UDim2.new(1, -16, 0.5, -6) or UDim2.new(0, 3, 0.5, -6),
             BackgroundColor3 = on and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(80, 80, 80),
         }):Play()
         TS:Create(pill, info, {
-            BackgroundColor3 = on and Color3.fromRGB(255, 140, 0) or Color3.fromRGB(40, 28, 12),
+            BackgroundColor3 = on and theme or offPill,
             BackgroundTransparency = on and 0 or 0.15,
         }):Play()
         if stroke then
             TS:Create(stroke, info, {
-                Color = on and Color3.fromRGB(255, 190, 80) or Color3.fromRGB(80, 60, 30),
+                Color = on and glow or Color3.fromRGB(80, 60, 30),
                 Transparency = on and 0 or 0.35,
                 Thickness = on and 1.8 or 1,
             }):Play()
@@ -11359,11 +11408,12 @@ function buildGui()
         end)
     end
 
-    -- Button / accent color theme (dropdown like Bat Aimbot Mode, no < > arrows)
+    -- Button / accent color theme (dropdown; paints BAT AIMBOT / ANTI AIMBOT / floating btns)
     do
         local row = mkRow(visualPage, 38)
         mkLabel(row, "Button Color")
         local openBtn = Instance.new("TextButton", row)
+        openBtn.Name = "ButtonColorOpen"
         openBtn.Size = UDim2.new(0, 120, 0, 26)
         openBtn.Position = UDim2.new(1, -128, 0.5, -13)
         openBtn.BackgroundColor3 = INP
@@ -11374,7 +11424,9 @@ function buildGui()
         openBtn.Font = Enum.Font.GothamBold
         openBtn.TextSize = 12
         openBtn.AutoButtonColor = false
-        openBtn.ZIndex = 12
+        openBtn.Active = true
+        openBtn.Selectable = true
+        openBtn.ZIndex = 50
         Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 8)
         local openStroke = Instance.new("UIStroke", openBtn)
         openStroke.Color = Color3.fromRGB(220, 220, 225)
@@ -11382,31 +11434,39 @@ function buildGui()
         openStroke.Transparency = 0.35
         colorSelectorLabel = openBtn
 
-        local dropFrame = Instance.new("Frame", visualPage)
+        -- Overlay on main GUI so ScrollingFrame does not clip / block clicks
+        local dropParent = main or visualPage
+        local dropFrame = Instance.new("Frame", dropParent)
         dropFrame.Name = "ButtonColorDrop"
-        dropFrame.Size = UDim2.new(1, -16, 0, 0)
+        dropFrame.Size = UDim2.new(0, 160, 0, 0)
         dropFrame.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
-        dropFrame.BackgroundTransparency = 0.15
+        dropFrame.BackgroundTransparency = 0.08
         dropFrame.BorderSizePixel = 0
         dropFrame.Visible = false
         dropFrame.ClipsDescendants = true
-        dropFrame.ZIndex = 30
-        dropFrame.LayoutOrder = getNextOrder(visualPage)
+        dropFrame.ZIndex = 200
         Instance.new("UICorner", dropFrame).CornerRadius = UDim.new(0, 10)
         local dropStroke = Instance.new("UIStroke", dropFrame)
         dropStroke.Color = Color3.fromRGB(220, 220, 225)
         dropStroke.Thickness = 1.2
-        dropStroke.Transparency = 0.3
+        dropStroke.Transparency = 0.25
         local dropList = Instance.new("UIListLayout", dropFrame)
         dropList.FillDirection = Enum.FillDirection.Vertical
         dropList.Padding = UDim.new(0, 4)
         dropList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        dropList.SortOrder = Enum.SortOrder.LayoutOrder
         local dropPad = Instance.new("UIPadding", dropFrame)
         dropPad.PaddingTop = UDim.new(0, 6)
         dropPad.PaddingBottom = UDim.new(0, 6)
 
         local expanded = false
         local optButtons = {}
+        local function placeDrop()
+            local absPos = openBtn.AbsolutePosition
+            local absSize = openBtn.AbsoluteSize
+            local parentAbs = dropParent.AbsolutePosition
+            dropFrame.Position = UDim2.new(0, absPos.X - parentAbs.X, 0, absPos.Y - parentAbs.Y + absSize.Y + 4)
+        end
         local function refreshOpts()
             for _, b in ipairs(optButtons) do
                 local active = (b.Name == tostring(currentColorTheme))
@@ -11417,10 +11477,28 @@ function buildGui()
             openBtn.Text = tostring(currentColorTheme or "Naranja") .. (expanded and "  ▲" or "  ▼")
             openBtn.TextColor3 = selectedColor or WHITE
         end
-        for _, themeName in ipairs(COLOR_THEME_ORDER) do
+        local function setExpanded(on)
+            expanded = on == true
+            if expanded then
+                placeDrop()
+                local h = 6 + (#COLOR_THEME_ORDER * 32) + 6
+                dropFrame.Size = UDim2.new(0, 160, 0, h)
+                dropFrame.Visible = true
+            else
+                dropFrame.Size = UDim2.new(0, 160, 0, 0)
+                dropFrame.Visible = false
+            end
+            refreshOpts()
+        end
+        local function pickTheme(themeName)
+            applyColorTheme(themeName)
+            setExpanded(false)
+        end
+        for i, themeName in ipairs(COLOR_THEME_ORDER) do
             local b = Instance.new("TextButton", dropFrame)
             b.Name = themeName
-            b.Size = UDim2.new(1, -16, 0, 28)
+            b.LayoutOrder = i
+            b.Size = UDim2.new(1, -12, 0, 28)
             b.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
             b.BorderSizePixel = 0
             b.Text = themeName
@@ -11428,29 +11506,22 @@ function buildGui()
             b.Font = Enum.Font.GothamBold
             b.TextSize = 13
             b.AutoButtonColor = false
-            b.ZIndex = 31
+            b.Active = true
+            b.Selectable = true
+            b.ZIndex = 201
             Instance.new("UICorner", b).CornerRadius = UDim.new(0, 7)
-            b.MouseButton1Click:Connect(function()
-                applyColorTheme(themeName)
-                expanded = false
-                dropFrame.Visible = false
-                dropFrame.Size = UDim2.new(1, -16, 0, 0)
-                refreshOpts()
-            end)
+            local function onPick()
+                pickTheme(themeName)
+            end
+            b.MouseButton1Click:Connect(onPick)
+            b.Activated:Connect(onPick)
             table.insert(optButtons, b)
         end
-        openBtn.MouseButton1Click:Connect(function()
-            expanded = not expanded
-            if expanded then
-                local h = 6 + (#COLOR_THEME_ORDER * 32) + 6
-                dropFrame.Size = UDim2.new(1, -16, 0, h)
-                dropFrame.Visible = true
-            else
-                dropFrame.Size = UDim2.new(1, -16, 0, 0)
-                dropFrame.Visible = false
-            end
-            refreshOpts()
-        end)
+        local function onOpen()
+            setExpanded(not expanded)
+        end
+        openBtn.MouseButton1Click:Connect(onOpen)
+        openBtn.Activated:Connect(onOpen)
         refreshOpts()
     end
 
