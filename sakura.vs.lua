@@ -1477,13 +1477,13 @@ function applyOutfitByIndex(index)
 
     if cfg.kawatan then
         applyKawatanCatalogOutfit(char, cfg.kawatan)
-        if outfitSelectorLabel then outfitSelectorLabel.Text = cfg.label end
+        if outfitSelectorLabel then outfitSelectorLabel.Text = tostring(cfg.label) .. "  ▼" end
         return
     end
 
     if cfg.customApply then
         cfg.customApply(char)
-        if outfitSelectorLabel then outfitSelectorLabel.Text = cfg.label end
+        if outfitSelectorLabel then outfitSelectorLabel.Text = tostring(cfg.label) .. "  ▼" end
         return
     end
 
@@ -1572,7 +1572,7 @@ function applyOutfitByIndex(index)
             if oldKorblox then oldKorblox:Destroy() end
         end
     end
-    if outfitSelectorLabel then outfitSelectorLabel.Text = cfg.label end
+    if outfitSelectorLabel then outfitSelectorLabel.Text = tostring(cfg.label) .. "  ▼" end
 end
 
 speedMode = false
@@ -1653,7 +1653,7 @@ AUTO_BAT_V2_HIT_DIST = 4.5
 AUTO_BAT_V2_SWING_CD = 0.08
 _batV2Conn = nil
 
-useCarrySystem = false
+useCarrySystem = true
 lastMoveDir = _V3zero
 
 local CoreGui = game:GetService("CoreGui")
@@ -1979,7 +1979,7 @@ end
 
 local function applyAnimPack(packName)
     currentAnimPack = packName
-    if animSelectorLabel then animSelectorLabel.Text = packName end
+    if animSelectorLabel then animSelectorLabel.Text = tostring(packName) .. "  ▼" end
     if packName == "Off" then
         if originalTryardAnims and LP.Character then
             local animate = LP.Character:FindFirstChild("Animate")
@@ -2038,7 +2038,7 @@ end
 
 local function stopAnimPack()
     currentAnimPack = "Off"
-    if animSelectorLabel then animSelectorLabel.Text = "Off" end
+    if animSelectorLabel then animSelectorLabel.Text = "Off  ▼" end
     applyAnimPack("Off")
 end
 
@@ -7095,7 +7095,7 @@ function loadAllSettings()
     end
     skyTheme = data.skyTheme or "Off"
     if skyTheme ~= "Off" then pcall(applyCustomSky, skyTheme) end
-    if skySelectorLabel then skySelectorLabel.Text = skyTheme end
+    if skySelectorLabel then skySelectorLabel.Text = tostring(skyTheme) .. "  ▼" end
     neonWeatherEnabled = data.neonWeather or false
     if neonWeatherEnabled then
         task.defer(function() toggleNeonWeather(true) end)
@@ -7103,7 +7103,7 @@ function loadAllSettings()
         toggleNeonWeather(false)
         skyTheme = "Off"
         pcall(applyCustomSky, "Off")
-        if skySelectorLabel then skySelectorLabel.Text = "Off" end
+        if skySelectorLabel then skySelectorLabel.Text = "Off  ▼" end
     end
     if data.animPack and ANIM_PACKS[data.animPack] then
         startAnimPack(data.animPack)
@@ -7196,12 +7196,12 @@ function loadAllSettings()
         task.defer(function()
             pcall(function() applyOutfitByIndex(currentOutfitIndex) end)
             if outfitSelectorLabel then
-                outfitSelectorLabel.Text = OUTFITS[currentOutfitIndex].label
+                outfitSelectorLabel.Text = tostring(OUTFITS[currentOutfitIndex].label) .. "  ▼"
             end
         end)
     end
 
-    useCarrySystem = data.useCarrySystem or false
+    useCarrySystem = true
     autoCarrySpeedEnabled = data.autoCarrySpeedEnabled == true
     CarrySystem.normalSpeed = data.carrySysNormal or NS
     CarrySystem.carrySpeed = data.carrySysCarry or CS
@@ -7342,7 +7342,7 @@ function forceResetUI()
     toggleNeonWeather(false)
     skyTheme = "Off"
     pcall(applyCustomSky, "Off")
-    if skySelectorLabel then skySelectorLabel.Text = "Off" end
+    if skySelectorLabel then skySelectorLabel.Text = "Off  ▼" end
     disableBatV2()
     if antiDieEnabled then
         AntiDieModule.stop()
@@ -7458,7 +7458,7 @@ function resetToFactoryDefaults()
         toggleNeonWeather(false)
         skyTheme = "Off"
         pcall(applyCustomSky, "Off")
-        if skySelectorLabel then skySelectorLabel.Text = "Off" end
+        if skySelectorLabel then skySelectorLabel.Text = "Off  ▼" end
         if antiDieEnabled then
             AntiDieModule.stop()
             antiDieEnabled = false
@@ -7523,7 +7523,7 @@ floatingButtonShape = "Rounded" -- "Rounded" | "Square" | "Circle" | "Circle"
                 KB[key].gp = val.gp
             end
         end
-        useCarrySystem = false
+        useCarrySystem = true
         CarrySystem:stop()
         CarrySystem.normalSpeed = NS
         CarrySystem.carrySpeed = CS
@@ -10472,6 +10472,119 @@ function buildGui()
         return label
     end
 
+    -- Aimbot-mode style ▼ dropdown (options list under the row)
+    -- page: parent ScrollingFrame, row: the mkRow, defaultText, options (string list), onPick(optionName)
+    -- returns the open button (so caller can update text later)
+    local function mkDropdown(page, row, defaultText, options, onPick)
+        local openBtn = Instance.new("TextButton", row)
+        openBtn.Size = UDim2.new(0, 120, 0, 26)
+        openBtn.Position = UDim2.new(1, -128, 0.5, -13)
+        openBtn.BackgroundColor3 = INP
+        openBtn.BackgroundTransparency = 0.12
+        openBtn.BorderSizePixel = 0
+        openBtn.Text = tostring(defaultText or "") .. "  ▼"
+        openBtn.TextColor3 = WHITE
+        openBtn.Font = Enum.Font.GothamBold
+        openBtn.TextSize = 12
+        openBtn.AutoButtonColor = false
+        openBtn.ZIndex = 12
+        Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 8)
+        local openStroke = Instance.new("UIStroke", openBtn)
+        openStroke.Color = Color3.fromRGB(220, 220, 225)
+        openStroke.Thickness = 1.2
+        openStroke.Transparency = 0.35
+
+        local dropFrame = Instance.new("Frame", page)
+        dropFrame.Size = UDim2.new(1, -16, 0, 0)
+        dropFrame.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
+        dropFrame.BackgroundTransparency = 0.15
+        dropFrame.BorderSizePixel = 0
+        dropFrame.Visible = false
+        dropFrame.ClipsDescendants = true
+        dropFrame.ZIndex = 30
+        dropFrame.LayoutOrder = getNextOrder(page)
+        Instance.new("UICorner", dropFrame).CornerRadius = UDim.new(0, 10)
+        local dropStroke = Instance.new("UIStroke", dropFrame)
+        dropStroke.Color = Color3.fromRGB(220, 220, 225)
+        dropStroke.Thickness = 1.2
+        dropStroke.Transparency = 0.3
+
+        local maxVisible = 8
+        local useScroll = #options > maxVisible
+        local listParent = dropFrame
+        if useScroll then
+            local sf = Instance.new("ScrollingFrame", dropFrame)
+            sf.Size = UDim2.new(1, 0, 1, 0)
+            sf.BackgroundTransparency = 1
+            sf.BorderSizePixel = 0
+            sf.ScrollBarThickness = 4
+            sf.ScrollBarImageColor3 = Color3.fromRGB(200, 200, 210)
+            sf.CanvasSize = UDim2.new(0, 0, 0, 6 + (#options * 32) + 6)
+            sf.ZIndex = 31
+            listParent = sf
+        end
+        local dropList = Instance.new("UIListLayout", listParent)
+        dropList.FillDirection = Enum.FillDirection.Vertical
+        dropList.Padding = UDim.new(0, 4)
+        dropList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        local dropPad = Instance.new("UIPadding", listParent)
+        dropPad.PaddingTop = UDim.new(0, 6)
+        dropPad.PaddingBottom = UDim.new(0, 6)
+
+        local expanded = false
+        local current = tostring(defaultText or "")
+        local optButtons = {}
+        local function refreshOpts()
+            for _, b in ipairs(optButtons) do
+                local active = (b.Name == current)
+                b.BackgroundColor3 = active and Color3.fromRGB(220, 220, 225) or Color3.fromRGB(22, 26, 32)
+                b.TextColor3 = active and Color3.fromRGB(8, 10, 14) or WHITE
+            end
+            openBtn.Text = current .. (expanded and "  ▲" or "  ▼")
+        end
+        for _, optName in ipairs(options) do
+            local b = Instance.new("TextButton", listParent)
+            b.Name = optName
+            b.Size = UDim2.new(1, -16, 0, 28)
+            b.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
+            b.BorderSizePixel = 0
+            b.Text = optName
+            b.TextColor3 = WHITE
+            b.Font = Enum.Font.GothamBold
+            b.TextSize = 13
+            b.AutoButtonColor = false
+            b.ZIndex = 32
+            Instance.new("UICorner", b).CornerRadius = UDim.new(0, 7)
+            b.MouseButton1Click:Connect(function()
+                current = optName
+                expanded = false
+                dropFrame.Visible = false
+                dropFrame.Size = UDim2.new(1, -16, 0, 0)
+                refreshOpts()
+                if onPick then onPick(optName) end
+            end)
+            table.insert(optButtons, b)
+        end
+        openBtn.MouseButton1Click:Connect(function()
+            expanded = not expanded
+            if expanded then
+                local n = math.min(#options, maxVisible)
+                local h = 6 + (n * 32) + 6
+                dropFrame.Size = UDim2.new(1, -16, 0, h)
+                dropFrame.Visible = true
+            else
+                dropFrame.Size = UDim2.new(1, -16, 0, 0)
+                dropFrame.Visible = false
+            end
+            refreshOpts()
+        end)
+        refreshOpts()
+        return openBtn, function(newText)
+            current = tostring(newText or current)
+            refreshOpts()
+        end
+    end
+
     local function mkBox(parent, default, w, xOff, cb)
         local tb = Instance.new("TextBox", parent)
         local bw = w or 50
@@ -10634,22 +10747,13 @@ function buildGui()
     do local row = mkRow(speedPage, 38); mkLabel(row, "Lagger Speed"); carrySysLaggerBox = mkBox(row, CarrySystem.laggerSpeed, 50, 56, function(v) if v > 0 and v <= 500 then CarrySystem:setLaggerSpeed(v); saveAllSettings() end end) end
     do local row = mkRow(speedPage, 38); mkLabel(row, "Lagger Carry Spd"); carrySysLaggerCarryBox = mkBox(row, CarrySystem.laggerCarrySpeed, 50, 56, function(v) if v > 0 and v <= 500 then CarrySystem:setLaggerCarrySpeed(v); saveAllSettings() end end) end
 
-    -- Enable carry movement system
-    carrySystemToggleSetter = mkToggle(speedPage, "Enable Carry System", function(on)
-        useCarrySystem = on
-        if on then
-            CarrySystem:start()
-            CarrySystem.speedToggled = speedMode
-            CarrySystem:setLaggerMode(0)
-            CarrySystem:setSoftStealEnabled(false)
-        else
-            CarrySystem:stop()
-            CarrySystem:setSoftStealEnabled(false)
-        end
-        saveAllSettings()
-    end)
+    -- Carry system always on (no Enable toggle). Auto Carry Speed alone controls steal→carry speed.
+    useCarrySystem = true
+    CarrySystem:start()
+    CarrySystem.speedToggled = speedMode
+    CarrySystem:setSoftStealEnabled(false)
+    carrySystemToggleSetter = nil
 
-    -- Candy.vs style: auto switch to carry speed while stealing / carrying
     autoCarrySpeedSetVisual = mkToggle(speedPage, "Auto Carry Speed", function(on)
         autoCarrySpeedEnabled = on == true
         refreshSpeedModeLabel()
@@ -11197,172 +11301,55 @@ function buildGui()
     do
         local row = mkRow(visualPage, 38)
         mkLabel(row, "Anim Pack")
-        local currentIndex = 1
-        for i, entry in ipairs(ANIM_PACK_ORDER) do
-            if entry[2] == currentAnimPack then currentIndex = i; break end
+        local animNames = {}
+        for _, entry in ipairs(ANIM_PACK_ORDER) do
+            table.insert(animNames, entry[2])
         end
-        local container = Instance.new("Frame", row)
-        container.Size = UDim2.new(0, 160, 1, 0)
-        container.Position = UDim2.new(1, -168, 0, 0)
-        container.BackgroundTransparency = 1
-        container.ZIndex = 8
-        local leftBtn = Instance.new("TextButton", container)
-        leftBtn.Size = UDim2.new(0, 28, 0, 26)
-        leftBtn.Position = UDim2.new(0, 0, 0.5, -13)
-        leftBtn.BackgroundColor3 = INP
-        leftBtn.BackgroundTransparency = 0.2
-        leftBtn.BorderSizePixel = 0
-        leftBtn.Text = "<"
-        leftBtn.TextColor3 = WHITE
-        leftBtn.Font = Enum.Font.GothamBold
-        leftBtn.TextSize = 13
-        leftBtn.AutoButtonColor = false
-        leftBtn.ZIndex = 9
-        Instance.new("UICorner", leftBtn).CornerRadius = UDim.new(0, 6)
-        local leftStroke = Instance.new("UIStroke", leftBtn)
-        leftStroke.Color = ROW_BORDER
-        leftStroke.Thickness = 1
-        animSelectorLabel = Instance.new("TextLabel", container)
-        animSelectorLabel.Size = UDim2.new(0, 80, 0, 26)
-        animSelectorLabel.Position = UDim2.new(0.5, -40, 0.5, -13)
-        animSelectorLabel.BackgroundTransparency = 1
-        animSelectorLabel.Text = ANIM_PACK_ORDER[currentIndex][2]
-        animSelectorLabel.TextColor3 = WHITE
-        animSelectorLabel.Font = Enum.Font.GothamBold
-        animSelectorLabel.TextSize = 12
-        animSelectorLabel.TextXAlignment = Enum.TextXAlignment.Center
-        animSelectorLabel.ZIndex = 9
-        local rightBtn = Instance.new("TextButton", container)
-        rightBtn.Size = UDim2.new(0, 28, 0, 26)
-        rightBtn.Position = UDim2.new(1, -28, 0.5, -13)
-        rightBtn.BackgroundColor3 = INP
-        rightBtn.BackgroundTransparency = 0.2
-        rightBtn.BorderSizePixel = 0
-        rightBtn.Text = ">"
-        rightBtn.TextColor3 = WHITE
-        rightBtn.Font = Enum.Font.GothamBold
-        rightBtn.TextSize = 13
-        rightBtn.AutoButtonColor = false
-        rightBtn.ZIndex = 9
-        Instance.new("UICorner", rightBtn).CornerRadius = UDim.new(0, 6)
-        local rightStroke = Instance.new("UIStroke", rightBtn)
-        rightStroke.Color = ROW_BORDER
-        rightStroke.Thickness = 1
-        local function updateAnimSelector(direction)
-            local idx = 1
-            for i, entry in ipairs(ANIM_PACK_ORDER) do
-                if entry[2] == currentAnimPack then idx = i; break end
-            end
-            local newIdx = idx + direction
-            if newIdx < 1 then newIdx = #ANIM_PACK_ORDER end
-            if newIdx > #ANIM_PACK_ORDER then newIdx = 1 end
-            local packName = ANIM_PACK_ORDER[newIdx][2]
+        animSelectorLabel = mkDropdown(visualPage, row, currentAnimPack or "Off", animNames, function(packName)
             if packName == "Off" then
                 stopAnimPack()
             else
                 startAnimPack(packName)
             end
-        end
-        leftBtn.MouseButton1Click:Connect(function() updateAnimSelector(-1) end)
-        rightBtn.MouseButton1Click:Connect(function() updateAnimSelector(1) end)
+            pcall(saveAllSettings)
+        end)
     end
 
     do
         local row = mkRow(visualPage, 38)
         mkLabel(row, "Outfit")
-        local container = Instance.new("Frame", row)
-        container.Size = UDim2.new(0, 160, 1, 0)
-        container.Position = UDim2.new(1, -168, 0, 0)
-        container.BackgroundTransparency = 1
-        container.ZIndex = 8
-        local leftBtn = Instance.new("TextButton", container)
-        leftBtn.Size = UDim2.new(0, 28, 0, 26)
-        leftBtn.Position = UDim2.new(0, 0, 0.5, -13)
-        leftBtn.BackgroundColor3 = INP
-        leftBtn.BackgroundTransparency = 0.2
-        leftBtn.BorderSizePixel = 0
-        leftBtn.Text = "<"
-        leftBtn.TextColor3 = WHITE
-        leftBtn.Font = Enum.Font.GothamBold
-        leftBtn.TextSize = 13
-        leftBtn.AutoButtonColor = false
-        leftBtn.ZIndex = 9
-        Instance.new("UICorner", leftBtn).CornerRadius = UDim.new(0, 6)
-        local leftStroke = Instance.new("UIStroke", leftBtn)
-        leftStroke.Color = ROW_BORDER
-        leftStroke.Thickness = 1
-        outfitSelectorLabel = Instance.new("TextLabel", container)
-        outfitSelectorLabel.Size = UDim2.new(0, 80, 0, 26)
-        outfitSelectorLabel.Position = UDim2.new(0.5, -40, 0.5, -13)
-        outfitSelectorLabel.BackgroundTransparency = 1
-        outfitSelectorLabel.Text = OUTFITS[currentOutfitIndex].label
-        outfitSelectorLabel.TextColor3 = WHITE
-        outfitSelectorLabel.Font = Enum.Font.GothamBold
-        outfitSelectorLabel.TextSize = 12
-        outfitSelectorLabel.TextXAlignment = Enum.TextXAlignment.Center
-        outfitSelectorLabel.ZIndex = 9
-        local rightBtn = Instance.new("TextButton", container)
-        rightBtn.Size = UDim2.new(0, 28, 0, 26)
-        rightBtn.Position = UDim2.new(1, -28, 0.5, -13)
-        rightBtn.BackgroundColor3 = INP
-        rightBtn.BackgroundTransparency = 0.2
-        rightBtn.BorderSizePixel = 0
-        rightBtn.Text = ">"
-        rightBtn.TextColor3 = WHITE
-        rightBtn.Font = Enum.Font.GothamBold
-        rightBtn.TextSize = 13
-        rightBtn.AutoButtonColor = false
-        rightBtn.ZIndex = 9
-        Instance.new("UICorner", rightBtn).CornerRadius = UDim.new(0, 6)
-        local rightStroke = Instance.new("UIStroke", rightBtn)
-        rightStroke.Color = ROW_BORDER
-        rightStroke.Thickness = 1
-        local function updateOutfit(direction)
-            local newIdx = currentOutfitIndex + direction
-            if newIdx < 1 then newIdx = #OUTFITS end
-            if newIdx > #OUTFITS then newIdx = 1 end
-            currentOutfitIndex = newIdx
-            pcall(function() applyOutfitByIndex(currentOutfitIndex) end)
-            if outfitSelectorLabel then
-                outfitSelectorLabel.Text = OUTFITS[currentOutfitIndex].label
-            end
-            saveAllSettings()
+        local outfitNames = {}
+        for i, cfg in ipairs(OUTFITS) do
+            outfitNames[i] = cfg.label
         end
-        leftBtn.MouseButton1Click:Connect(function() updateOutfit(-1) end)
-        rightBtn.MouseButton1Click:Connect(function() updateOutfit(1) end)
+        local curLabel = (OUTFITS[currentOutfitIndex] and OUTFITS[currentOutfitIndex].label) or "PURPLE"
+        outfitSelectorLabel = mkDropdown(visualPage, row, curLabel, outfitNames, function(label)
+            for i, cfg in ipairs(OUTFITS) do
+                if cfg.label == label then
+                    currentOutfitIndex = i
+                    pcall(function() applyOutfitByIndex(currentOutfitIndex) end)
+                    break
+                end
+            end
+            pcall(saveAllSettings)
+        end)
     end
-
 
     mkSect(visualPage, "Personalization")
 
     do
         local medusaRow = mkRow(visualPage, 38)
         mkLabel(medusaRow, "Medusa Skin")
-        local medusaOptions = { "Default", "Skull", "GoldenDesertEagle" }
-        local displayNames = {
-            Default = "Default",
-            Skull = "Skull",
-            GoldenDesertEagle = "Golden DE",
-        }
+        local reverse = { Default = "Default", Skull = "Skull", ["Golden DE"] = "GoldenDesertEagle" }
+        local labels = { Default = "Default", Skull = "Skull", GoldenDesertEagle = "Golden DE" }
         local current = tostring(medusaSkinChoice or _G.RivalMedusaSkin or "Default")
-        if not displayNames[current] then current = "Default" end
-        MedusaSkinSelector = mkSelector(medusaRow, displayNames[current] or "Default", {
-            "Default", "Skull", "Golden DE",
-        }, function(dir, updateLabel)
-            local opts = { "Default", "Skull", "GoldenDesertEagle" }
-            local labels = { "Default", "Skull", "Golden DE" }
-            local idx = 1
-            for i, name in ipairs(opts) do
-                if name == (medusaSkinChoice or _G.RivalMedusaSkin or "Default") then idx = i; break end
-            end
-            idx = idx + dir
-            if idx < 1 then idx = #opts end
-            if idx > #opts then idx = 1 end
-            medusaSkinChoice = opts[idx]
-            _G.RivalMedusaSkin = opts[idx]
-            updateLabel(labels[idx])
+        local display = labels[current] or "Default"
+        MedusaSkinSelector = mkDropdown(visualPage, medusaRow, display, { "Default", "Skull", "Golden DE" }, function(picked)
+            local key = reverse[picked] or "Default"
+            medusaSkinChoice = key
+            _G.RivalMedusaSkin = key
             pcall(function()
-                if _G.RivalSetMedusaSkin then _G.RivalSetMedusaSkin(opts[idx]) end
+                if _G.RivalSetMedusaSkin then _G.RivalSetMedusaSkin(key) end
             end)
             pcall(saveAllSettings)
         end)
@@ -11768,70 +11755,11 @@ function buildGui()
     do
         local row = mkRow(visualPage, 38)
         mkLabel(row, "Sky Theme")
-        local container = Instance.new("Frame", row)
-        container.Size = UDim2.new(0, 160, 1, 0)
-        container.Position = UDim2.new(1, -168, 0, 0)
-        container.BackgroundTransparency = 1
-        container.ZIndex = 8
-        local leftBtn = Instance.new("TextButton", container)
-        leftBtn.Size = UDim2.new(0, 28, 0, 26)
-        leftBtn.Position = UDim2.new(0, 0, 0.5, -13)
-        leftBtn.BackgroundColor3 = INP
-        leftBtn.BackgroundTransparency = 0.2
-        leftBtn.BorderSizePixel = 0
-        leftBtn.Text = "<"
-        leftBtn.TextColor3 = WHITE
-        leftBtn.Font = Enum.Font.GothamBold
-        leftBtn.TextSize = 13
-        leftBtn.AutoButtonColor = false
-        leftBtn.ZIndex = 9
-        Instance.new("UICorner", leftBtn).CornerRadius = UDim.new(0, 6)
-        local leftStroke = Instance.new("UIStroke", leftBtn)
-        leftStroke.Color = ROW_BORDER
-        leftStroke.Thickness = 1
-        skySelectorLabel = Instance.new("TextLabel", container)
-        skySelectorLabel.Size = UDim2.new(0, 96, 0, 26)
-        skySelectorLabel.Position = UDim2.new(0.5, -48, 0.5, -13)
-        skySelectorLabel.BackgroundTransparency = 1
-        skySelectorLabel.Text = skyTheme
-        skySelectorLabel.TextColor3 = WHITE
-        skySelectorLabel.Font = Enum.Font.GothamBold
-        skySelectorLabel.TextSize = 11
-        skySelectorLabel.TextScaled = false
-        skySelectorLabel.TextXAlignment = Enum.TextXAlignment.Center
-        skySelectorLabel.ZIndex = 9
-        local rightBtn = Instance.new("TextButton", container)
-        rightBtn.Size = UDim2.new(0, 28, 0, 26)
-        rightBtn.Position = UDim2.new(1, -28, 0.5, -13)
-        rightBtn.BackgroundColor3 = INP
-        rightBtn.BackgroundTransparency = 0.2
-        rightBtn.BorderSizePixel = 0
-        rightBtn.Text = ">"
-        rightBtn.TextColor3 = WHITE
-        rightBtn.Font = Enum.Font.GothamBold
-        rightBtn.TextSize = 13
-        rightBtn.AutoButtonColor = false
-        rightBtn.ZIndex = 9
-        Instance.new("UICorner", rightBtn).CornerRadius = UDim.new(0, 6)
-        local rightStroke = Instance.new("UIStroke", rightBtn)
-        rightStroke.Color = ROW_BORDER
-        rightStroke.Thickness = 1
-        local function updateSkySelector(direction)
-            local idx = 1
-            for i, name in ipairs(SKY_PRESETS_LIST) do
-                if name == skyTheme then idx = i; break end
-            end
-            local newIdx = idx + direction
-            if newIdx < 1 then newIdx = #SKY_PRESETS_LIST end
-            if newIdx > #SKY_PRESETS_LIST then newIdx = 1 end
-            local name = SKY_PRESETS_LIST[newIdx]
+        skySelectorLabel = mkDropdown(visualPage, row, skyTheme or "Off", SKY_PRESETS_LIST, function(name)
             skyTheme = name
             pcall(applyCustomSky, name)
-            if skySelectorLabel then skySelectorLabel.Text = name end
             pcall(saveAllSettings)
-        end
-        leftBtn.MouseButton1Click:Connect(function() updateSkySelector(-1) end)
-        rightBtn.MouseButton1Click:Connect(function() updateSkySelector(1) end)
+        end)
     end
 
     local configPage = contentPages["Config"]
