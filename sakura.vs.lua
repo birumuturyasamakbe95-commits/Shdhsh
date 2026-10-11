@@ -759,27 +759,40 @@ function getESPColor() return selectedESPColor or Color3.fromRGB(60, 140, 255) e
 
 function applyESPColorTheme(themeName)
     local color = COLOR_THEMES[themeName]
-    if not color then return end
+    if not color then
+        warn("[Sakura.vs] Unknown ESP theme:", tostring(themeName))
+        return
+    end
     espColorTheme = themeName
     selectedESPColor = color
     if espColorSelectorLabel then
         espColorSelectorLabel.Text = themeName .. "  ▼"
         espColorSelectorLabel.TextColor3 = color
     end
+    -- Update existing highlights (transparent body + outline)
     for _, hl in pairs(espHighlightCache or {}) do
-        if hl then
-            hl.FillColor = color
-            hl.OutlineColor = color
-            hl.FillTransparency = 0.78
-            hl.OutlineTransparency = 0.15
+        if hl and hl.Parent then
+            pcall(function()
+                hl.FillColor = color
+                hl.OutlineColor = color
+                hl.FillTransparency = 0.78
+                hl.OutlineTransparency = 0.15
+            end)
         end
     end
-    for _, lines in pairs(espTracerCache or {}) do
+    -- Rebuild tracers so Drawing line colors always refresh
+    for plr, lines in pairs(espTracerCache or {}) do
         if lines then
             for _, ln in ipairs(lines) do
-                if ln then ln.Color = color end
+                pcall(function()
+                    if ln then
+                        ln.Color = color
+                        if ln.Remove then ln:Remove() elseif ln.Destroy then ln:Destroy() end
+                    end
+                end)
             end
         end
+        espTracerCache[plr] = nil
     end
     for _, bb in pairs(espBillboardCache or {}) do
         if bb then
@@ -790,6 +803,8 @@ function applyESPColorTheme(themeName)
             end
         end
     end
+    -- Next ESP render frame rebuilds tracers with new color
+    _espLastRun = 0
     pcall(function()
         if type(saveAllSettings) == "function" then saveAllSettings() end
     end)
@@ -11408,12 +11423,11 @@ function buildGui()
         end)
     end
 
-    -- Button / accent color theme (dropdown; paints BAT AIMBOT / ANTI AIMBOT / floating btns)
+    -- Button Color — same dropdown pattern as Bat Aimbot Mode (proven working)
     do
         local row = mkRow(visualPage, 38)
         mkLabel(row, "Button Color")
         local openBtn = Instance.new("TextButton", row)
-        openBtn.Name = "ButtonColorOpen"
         openBtn.Size = UDim2.new(0, 120, 0, 26)
         openBtn.Position = UDim2.new(1, -128, 0.5, -13)
         openBtn.BackgroundColor3 = INP
@@ -11424,9 +11438,7 @@ function buildGui()
         openBtn.Font = Enum.Font.GothamBold
         openBtn.TextSize = 12
         openBtn.AutoButtonColor = false
-        openBtn.Active = true
-        openBtn.Selectable = true
-        openBtn.ZIndex = 50
+        openBtn.ZIndex = 12
         Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 8)
         local openStroke = Instance.new("UIStroke", openBtn)
         openStroke.Color = Color3.fromRGB(220, 220, 225)
@@ -11434,39 +11446,31 @@ function buildGui()
         openStroke.Transparency = 0.35
         colorSelectorLabel = openBtn
 
-        -- Overlay on main GUI so ScrollingFrame does not clip / block clicks
-        local dropParent = main or visualPage
-        local dropFrame = Instance.new("Frame", dropParent)
+        local dropFrame = Instance.new("Frame", visualPage)
         dropFrame.Name = "ButtonColorDrop"
-        dropFrame.Size = UDim2.new(0, 160, 0, 0)
+        dropFrame.Size = UDim2.new(1, -16, 0, 0)
         dropFrame.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
-        dropFrame.BackgroundTransparency = 0.08
+        dropFrame.BackgroundTransparency = 0.15
         dropFrame.BorderSizePixel = 0
         dropFrame.Visible = false
         dropFrame.ClipsDescendants = true
-        dropFrame.ZIndex = 200
+        dropFrame.ZIndex = 30
+        dropFrame.LayoutOrder = getNextOrder(visualPage)
         Instance.new("UICorner", dropFrame).CornerRadius = UDim.new(0, 10)
         local dropStroke = Instance.new("UIStroke", dropFrame)
         dropStroke.Color = Color3.fromRGB(220, 220, 225)
         dropStroke.Thickness = 1.2
-        dropStroke.Transparency = 0.25
+        dropStroke.Transparency = 0.3
         local dropList = Instance.new("UIListLayout", dropFrame)
         dropList.FillDirection = Enum.FillDirection.Vertical
         dropList.Padding = UDim.new(0, 4)
         dropList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        dropList.SortOrder = Enum.SortOrder.LayoutOrder
         local dropPad = Instance.new("UIPadding", dropFrame)
         dropPad.PaddingTop = UDim.new(0, 6)
         dropPad.PaddingBottom = UDim.new(0, 6)
 
         local expanded = false
         local optButtons = {}
-        local function placeDrop()
-            local absPos = openBtn.AbsolutePosition
-            local absSize = openBtn.AbsoluteSize
-            local parentAbs = dropParent.AbsolutePosition
-            dropFrame.Position = UDim2.new(0, absPos.X - parentAbs.X, 0, absPos.Y - parentAbs.Y + absSize.Y + 4)
-        end
         local function refreshOpts()
             for _, b in ipairs(optButtons) do
                 local active = (b.Name == tostring(currentColorTheme))
@@ -11477,28 +11481,10 @@ function buildGui()
             openBtn.Text = tostring(currentColorTheme or "Naranja") .. (expanded and "  ▲" or "  ▼")
             openBtn.TextColor3 = selectedColor or WHITE
         end
-        local function setExpanded(on)
-            expanded = on == true
-            if expanded then
-                placeDrop()
-                local h = 6 + (#COLOR_THEME_ORDER * 32) + 6
-                dropFrame.Size = UDim2.new(0, 160, 0, h)
-                dropFrame.Visible = true
-            else
-                dropFrame.Size = UDim2.new(0, 160, 0, 0)
-                dropFrame.Visible = false
-            end
-            refreshOpts()
-        end
-        local function pickTheme(themeName)
-            applyColorTheme(themeName)
-            setExpanded(false)
-        end
-        for i, themeName in ipairs(COLOR_THEME_ORDER) do
+        for _, themeName in ipairs(COLOR_THEME_ORDER) do
             local b = Instance.new("TextButton", dropFrame)
             b.Name = themeName
-            b.LayoutOrder = i
-            b.Size = UDim2.new(1, -12, 0, 28)
+            b.Size = UDim2.new(1, -16, 0, 28)
             b.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
             b.BorderSizePixel = 0
             b.Text = themeName
@@ -11506,28 +11492,35 @@ function buildGui()
             b.Font = Enum.Font.GothamBold
             b.TextSize = 13
             b.AutoButtonColor = false
-            b.Active = true
-            b.Selectable = true
-            b.ZIndex = 201
+            b.ZIndex = 31
             Instance.new("UICorner", b).CornerRadius = UDim.new(0, 7)
-            local function onPick()
-                pickTheme(themeName)
-            end
-            b.MouseButton1Click:Connect(onPick)
-            b.Activated:Connect(onPick)
+            b.MouseButton1Click:Connect(function()
+                applyColorTheme(themeName)
+                expanded = false
+                dropFrame.Visible = false
+                dropFrame.Size = UDim2.new(1, -16, 0, 0)
+                refreshOpts()
+            end)
             table.insert(optButtons, b)
         end
-        local function onOpen()
-            setExpanded(not expanded)
-        end
-        openBtn.MouseButton1Click:Connect(onOpen)
-        openBtn.Activated:Connect(onOpen)
+        openBtn.MouseButton1Click:Connect(function()
+            expanded = not expanded
+            if expanded then
+                local h = 6 + (#COLOR_THEME_ORDER * 32) + 6
+                dropFrame.Size = UDim2.new(1, -16, 0, h)
+                dropFrame.Visible = true
+            else
+                dropFrame.Size = UDim2.new(1, -16, 0, 0)
+                dropFrame.Visible = false
+            end
+            refreshOpts()
+        end)
         refreshOpts()
     end
 
     setESPVIsual = mkToggle(visualPage, "Player ESP", function(on) toggleESP(on) end)
 
-    -- ESP Color (same dropdown style as Button Color; default Mavi, transparent body)
+    -- ESP Color — same dropdown pattern as Bat Aimbot Mode
     do
         local row = mkRow(visualPage, 38)
         mkLabel(row, "ESP Color")
