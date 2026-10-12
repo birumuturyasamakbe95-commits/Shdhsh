@@ -807,6 +807,7 @@ function applyDiscordTextColor(themeName)
             end
         end
     end)
+    _lastSavedJSON = nil
     pcall(function()
         if type(saveAllSettings) == "function" then saveAllSettings() end
     end)
@@ -886,6 +887,7 @@ function applyColorTheme(themeName)
     selectedColor = color
     _lastThemeColor = nil -- force full UI refresh
     updateAllUIThemeColors(color)
+    _lastSavedJSON = nil
     pcall(function()
         if type(saveAllSettings) == "function" then saveAllSettings() end
     end)
@@ -7311,10 +7313,11 @@ function loadAllSettings()
 
     useCarrySystem = true
     autoCarrySpeedEnabled = data.autoCarrySpeedEnabled == true
-    CarrySystem.normalSpeed = data.carrySysNormal or NS
-    CarrySystem.carrySpeed = data.carrySysCarry or CS
-    CarrySystem.laggerSpeed = data.carrySysLagger or LAGGER_SPEED
-    CarrySystem.laggerCarrySpeed = data.carrySysLaggerCarry or LAGGER_CARRY_SPEED
+    -- Single source: Speed Settings values (NS/CS/LAGGER_*) drive CarrySystem
+    CarrySystem.normalSpeed = NS
+    CarrySystem.carrySpeed = CS
+    CarrySystem.laggerSpeed = LAGGER_SPEED
+    CarrySystem.laggerCarrySpeed = LAGGER_CARRY_SPEED
     CarrySystem.softStealSpeed = data.carrySysSoftStealSpeed or 50
     CarrySystem.softStealRadius = data.carrySysSoftStealRadius or 12
     if data.autoCarryMode == "ON STEAL" or data.autoCarryMode == "WHEN NEAR" then
@@ -10907,8 +10910,20 @@ function buildGui()
             pcall(saveAllSettings)
         end
     end) end
-    do local row = mkRow(speedPage, 38); mkLabel(row, "Lagger Normal Speed"); laggerBox = mkBox(row, LAGGER_SPEED, 50, 56, function(v) if v > 0 and v <= 500 then LAGGER_SPEED = v end end) end
-    do local row = mkRow(speedPage, 38); mkLabel(row, "Lagger Carry Speed"); lagger2Box = mkBox(row, LAGGER_CARRY_SPEED, 50, 56, function(v) if v > 0 and v <= 500 then LAGGER_CARRY_SPEED = v end end) end
+    do local row = mkRow(speedPage, 38); mkLabel(row, "Lagger Normal Speed"); laggerBox = mkBox(row, LAGGER_SPEED, 50, 56, function(v)
+        if v > 0 and v <= 500 then
+            LAGGER_SPEED = v
+            pcall(function() CarrySystem:setLaggerSpeed(v) end)
+            pcall(saveAllSettings)
+        end
+    end) end
+    do local row = mkRow(speedPage, 38); mkLabel(row, "Lagger Carry Speed"); lagger2Box = mkBox(row, LAGGER_CARRY_SPEED, 50, 56, function(v)
+        if v > 0 and v <= 500 then
+            LAGGER_CARRY_SPEED = v
+            pcall(function() CarrySystem:setLaggerCarrySpeed(v) end)
+            pcall(saveAllSettings)
+        end
+    end) end
     do
         local row = mkRow(speedPage, 38)
         mkLabel(row, "Current Mode")
@@ -10983,18 +10998,16 @@ function buildGui()
         saveAllSettings()
     end)
 
-    mkSect(speedPage, "Carry Speeds")
-    do local row = mkRow(speedPage, 38); mkLabel(row, "Normal Speed"); carrySysNormalBox = mkBox(row, CarrySystem.normalSpeed, 50, 56, function(v) if v > 0 and v <= 500 then CarrySystem:setNormalSpeed(v); saveAllSettings() end end) end
-    do local row = mkRow(speedPage, 38); mkLabel(row, "Carry Speed"); carrySysCarryBox = mkBox(row, CarrySystem.carrySpeed, 50, 56, function(v) if v > 0 and v <= 500 then CarrySystem:setCarrySpeed(v); saveAllSettings() end end) end
-    do local row = mkRow(speedPage, 38); mkLabel(row, "Lagger Speed"); carrySysLaggerBox = mkBox(row, CarrySystem.laggerSpeed, 50, 56, function(v) if v > 0 and v <= 500 then CarrySystem:setLaggerSpeed(v); saveAllSettings() end end) end
-    do local row = mkRow(speedPage, 38); mkLabel(row, "Lagger Carry Spd"); carrySysLaggerCarryBox = mkBox(row, CarrySystem.laggerCarrySpeed, 50, 56, function(v) if v > 0 and v <= 500 then CarrySystem:setLaggerCarrySpeed(v); saveAllSettings() end end) end
-
-    -- Carry system always on (no Enable toggle). Auto Carry Speed alone controls steal→carry speed.
+    -- Single speed panel only (Speed Settings above). CarrySystem stays always-on.
     useCarrySystem = true
     CarrySystem:start()
     CarrySystem.speedToggled = speedMode
     CarrySystem:setSoftStealEnabled(false)
     carrySystemToggleSetter = nil
+    carrySysNormalBox = nil
+    carrySysCarryBox = nil
+    carrySysLaggerBox = nil
+    carrySysLaggerCarryBox = nil
 
     autoCarrySpeedSetVisual = mkToggle(speedPage, "Auto Carry Speed", function(on)
         autoCarrySpeedEnabled = on == true
@@ -11021,99 +11034,18 @@ function buildGui()
     do
         local row = mkRow(combatPage, 38)
         mkLabel(row, "Anti Ragdoll")
-        local selectorBtn = Instance.new("TextButton", row)
-        selectorBtn.Size = UDim2.new(0, 100, 1, 0)
-        selectorBtn.Position = UDim2.new(1, -108, 0, 0)
-        selectorBtn.BackgroundColor3 = Color3.fromRGB(12,12,12)
-        selectorBtn.BackgroundTransparency = 0.2
-        selectorBtn.BorderSizePixel = 0
-        selectorBtn.Text = "Off ▼"
-        selectorBtn.TextColor3 = Color3.fromRGB(255,255,255)
-        selectorBtn.Font = Enum.Font.GothamBold
-        selectorBtn.TextSize = 12
-        selectorBtn.AutoButtonColor = false
-        selectorBtn.ZIndex = 8
-        Instance.new("UICorner", selectorBtn).CornerRadius = UDim.new(0, 6)
-        local selStroke = Instance.new("UIStroke", selectorBtn)
-        selStroke.Color = Color3.fromRGB(50,50,50)
-        selStroke.Thickness = 1
-
-        local dropdown = Instance.new("Frame", combatPage)
-        dropdown.Size = UDim2.new(0, 100, 0, 90)
-        dropdown.Position = UDim2.new(0, 0, 0, 0)
-        dropdown.BackgroundColor3 = Color3.fromRGB(16, 17, 20)
-        dropdown.BackgroundTransparency = 0.1
-        dropdown.BorderSizePixel = 0
-        dropdown.Visible = false
-        dropdown.ZIndex = 20
-        Instance.new("UICorner", dropdown).CornerRadius = UDim.new(0, 8)
-        local dropStroke = Instance.new("UIStroke", dropdown)
-        dropStroke.Color = Color3.fromRGB(50,50,50)
-        dropStroke.Thickness = 1
-
-        local options = {"Off", "V1", "V2"}
-        local optionButtons = {}
-        for i, opt in ipairs(options) do
-            local btn = Instance.new("TextButton", dropdown)
-            btn.Size = UDim2.new(1, 0, 0, 30)
-            btn.Position = UDim2.new(0, 0, 0, (i-1)*30)
-            btn.BackgroundColor3 = Color3.fromRGB(0,0,0)
-            btn.BackgroundTransparency = 0.5
-            btn.BorderSizePixel = 0
-            btn.Text = opt
-            btn.TextColor3 = Color3.fromRGB(255,255,255)
-            btn.Font = Enum.Font.GothamBold
-            btn.TextSize = 12
-            btn.ZIndex = 21
-            btn.AutoButtonColor = false
-            btn.MouseButton1Click:Connect(function()
-                local mode = opt:lower()
-                setAntiRagdollMode(mode)
-                dropdown.Visible = false
-            end)
-            optionButtons[opt] = btn
-        end
-
-        selectorBtn.MouseButton1Click:Connect(function()
-            if dropdown.Visible then
-                dropdown.Visible = false
-                return
-            end
-            local absPos = selectorBtn.AbsolutePosition
-            local size = selectorBtn.AbsoluteSize
-            dropdown.Position = UDim2.new(0, absPos.X, 0, absPos.Y + size.Y)
-            dropdown.Visible = true
+        local modeLabel = ({ off = "Off", v1 = "V1", v2 = "V2" })[tostring(antiRagdollMode or "off")] or "Off"
+        local arSelector = mkDropdown(combatPage, row, modeLabel, { "Off", "V1", "V2" }, function(picked)
+            local mode = tostring(picked or "Off"):lower()
+            if mode ~= "off" and mode ~= "v1" and mode ~= "v2" then mode = "off" end
+            setAntiRagdollMode(mode)
         end)
-
-        UIS.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                if dropdown.Visible then
-                    local mousePos = input.Position
-                    local absPos = dropdown.AbsolutePosition
-                    local size = dropdown.AbsoluteSize
-                    if not (mousePos.X >= absPos.X and mousePos.X <= absPos.X + size.X and
-                            mousePos.Y >= absPos.Y and mousePos.Y <= absPos.Y + size.Y) then
-                        dropdown.Visible = false
-                    end
-                end
-            end
-        end)
-
         local function updateAntiRagdollUI(mode)
-            local label = mode:gsub("^%l", string.upper)
-            if mode == "off" then label = "Off" end
-            selectorBtn.Text = label .. " ▼"
-            for opt, btn in pairs(optionButtons) do
-                if opt:lower() == mode then
-                    btn.BackgroundColor3 = getThemeColor()
-                    btn.TextColor3 = Color3.fromRGB(0,0,0)
-                else
-                    btn.BackgroundColor3 = Color3.fromRGB(0,0,0)
-                    btn.TextColor3 = Color3.fromRGB(255,255,255)
-                end
+            local label = ({ off = "Off", v1 = "V1", v2 = "V2" })[tostring(mode or "off")] or "Off"
+            if arSelector then
+                arSelector.Text = label .. "  ▼"
             end
         end
-
         _G.updateAntiRagdollUI = updateAntiRagdollUI
         updateAntiRagdollUI(antiRagdollMode)
     end
@@ -11573,6 +11505,7 @@ function buildGui()
                     break
                 end
             end
+            _lastSavedJSON = nil -- force write
             pcall(saveAllSettings)
         end)
     end
