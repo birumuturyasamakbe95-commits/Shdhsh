@@ -674,11 +674,16 @@ function CarrySystem:updateMovement(dt)
             else
                 self._blockedTime = 0
             end
-            if self._blockedTime > 0.35 then
-                if lv.MaxForce ~= self._freeForce then lv.MaxForce = self._freeForce end
-            elseif lv.MaxForce ~= self._maxForce then
-                lv.MaxForce = self._maxForce
+            -- Pet/carry: stronger force so set speed (e.g. 29) actually holds
+            local carrying = self:isCarrying()
+            local targetForce = self._maxForce
+            if carrying then
+                targetForce = math.max(self._maxForce, 6000)
             end
+            if self._blockedTime > 0.35 then
+                targetForce = self._freeForce
+            end
+            if lv.MaxForce ~= targetForce then lv.MaxForce = targetForce end
         end
     elseif CarrySystem._lvBoost then
         CarrySystem._lvBoost.PlaneVelocity = Vector2.zero
@@ -748,6 +753,64 @@ local COLOR_THEME_ORDER = { "Morado", "Mavi", "Kirmizi", "Yesil", "Sari", "Naran
 
 currentColorTheme = "Naranja"
 selectedColor = ORANGE
+
+discordTextColorTheme = "White"
+selectedDiscordColor = Color3.fromRGB(255, 255, 255)
+discordColorSelectorLabel = nil
+DISCORD_COLOR_THEMES = {
+    ["White"]  = Color3.fromRGB(255, 255, 255),
+    ["Blue"]   = Color3.fromRGB(60, 140, 255),
+    ["Mavi"]   = Color3.fromRGB(40, 170, 255),
+    ["Yellow"] = Color3.fromRGB(255, 220, 50),
+    ["Sari"]   = Color3.fromRGB(255, 210, 40),
+    ["Purple"] = Color3.fromRGB(170, 90, 255),
+    ["Mor"]    = Color3.fromRGB(160, 100, 220),
+    ["Red"]    = Color3.fromRGB(255, 70, 90),
+    ["Green"]  = Color3.fromRGB(80, 230, 120),
+    ["Orange"] = Color3.fromRGB(255, 150, 40),
+    ["Pink"]   = Color3.fromRGB(255, 120, 200),
+}
+DISCORD_COLOR_ORDER = { "White", "Blue", "Mavi", "Yellow", "Sari", "Purple", "Mor", "Red", "Green", "Orange", "Pink" }
+
+function getDiscordTextColor()
+    return selectedDiscordColor or Color3.fromRGB(255, 255, 255)
+end
+
+function applyDiscordTextColor(themeName)
+    local color = DISCORD_COLOR_THEMES[themeName]
+    if not color then return end
+    discordTextColorTheme = themeName
+    selectedDiscordColor = color
+    if discordColorSelectorLabel then
+        discordColorSelectorLabel.Text = themeName .. "  ▼"
+        discordColorSelectorLabel.TextColor3 = color
+    end
+    -- Head billboard
+    pcall(function()
+        local char = LP.Character
+        local head = char and char:FindFirstChild("Head")
+        local bb = head and head:FindFirstChild("DiscordText")
+        local lbl = bb and bb:FindFirstChild("DiscordLabel")
+        if lbl then lbl.TextColor3 = color end
+    end)
+    -- Steal bar discord if any
+    pcall(function()
+        if pbFrame then
+            local d = pbFrame:FindFirstChild("DiscordLabel")
+            if d then d.TextColor3 = color end
+        end
+        if gui then
+            for _, child in ipairs(gui:GetDescendants()) do
+                if child:IsA("TextLabel") and (child.Name == "DiscordLabel" or child.Name == "DiscordText" or (child.Text and child.Text:find("discord.gg"))) then
+                    child.TextColor3 = color
+                end
+            end
+        end
+    end)
+    pcall(function()
+        if type(saveAllSettings) == "function" then saveAllSettings() end
+    end)
+end
 
 -- ESP color is independent from button/UI theme (default blue, transparent body)
 espColorTheme = "Mavi"
@@ -850,15 +913,16 @@ function updateAllUIThemeColors(color)
         local border = pbFrame:FindFirstChildOfClass("UIStroke")
         if border then border.Color = color end
         local discordLabel = pbFrame:FindFirstChild("DiscordLabel")
-        if discordLabel then discordLabel.TextColor3 = color end
+        if discordLabel then discordLabel.TextColor3 = getDiscordTextColor() end
         local fpsNeon = pbFrame:FindFirstChild("FPSNeon")
         if fpsNeon then fpsNeon.TextColor3 = color end
     end
     local function searchAndUpdateText(parent)
         for _, child in ipairs(parent:GetDescendants()) do
             if child:IsA("TextLabel") then
-                if child.Text:find("discord.gg") or child.Text:find("Spd:") or child.Name == "DiscordText" or
-                   child.Name == "Sakura.vsSpeedIndicator" or child.Text:find("FPS") then
+                if child.Text:find("discord.gg") or child.Name == "DiscordLabel" or child.Name == "DiscordText" then
+                    child.TextColor3 = getDiscordTextColor()
+                elseif child.Text:find("Spd:") or child.Name == "Sakura.vsSpeedIndicator" or child.Text:find("FPS") then
                     child.TextColor3 = color
                 end
             end
@@ -1840,6 +1904,26 @@ local function claimOwnership(root)
 end
 
 function getActiveMoveSpeed()
+    if useCarrySystem and CarrySystem then
+        -- Keep CarrySystem speeds authoritative (NS/CS boxes sync into it)
+        if laggerCarryToggled then
+            CarrySystem:setLaggerMode(2)
+            return CarrySystem.laggerCarrySpeed
+        elseif laggerToggled then
+            CarrySystem:setLaggerMode(1)
+            return CarrySystem.laggerSpeed
+        else
+            CarrySystem:setLaggerMode(0)
+        end
+        CarrySystem.speedToggled = speedMode == true
+        if speedMode then
+            return CarrySystem.carrySpeed or CS
+        end
+        if autoCarrySpeedEnabled and CarrySystem:isCarrying() then
+            return CarrySystem.carrySpeed or CS
+        end
+        return CarrySystem.normalSpeed or NS
+    end
     if laggerCarryToggled then return LAGGER_CARRY_SPEED
     elseif laggerToggled then return LAGGER_SPEED
     elseif speedMode then return CS
@@ -3412,7 +3496,7 @@ function setupSpeedIndicator(char)
     discordLabel.Position = UDim2.new(0, 0, 0, 0)
     discordLabel.BackgroundTransparency = 1
     discordLabel.Text = "discord.gg/sakuraduels"
-    discordLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    discordLabel.TextColor3 = getDiscordTextColor()
     discordLabel.Font = Enum.Font.GothamBlack
     discordLabel.TextScaled = true
     discordLabel.TextStrokeTransparency = 0.3
@@ -6619,7 +6703,13 @@ function setupMovementAndIndicators(char)
             local v = hrp.AssemblyLinearVelocity
             local s = _sqrt(v.X*v.X + v.Z*v.Z)
             if s < 0.05 then s = 0 end
-            speedLabel.Text = "Hız: " .. string.format("%.1f", s)
+            local target = getActiveMoveSpeed()
+            -- Pet tutarken hedef hızı da göster (29 ayarlıysa 29 görünsün)
+            if CarrySystem and CarrySystem:isCarrying() then
+                speedLabel.Text = string.format("Hız: %.1f / %d", s, _floor(target + 0.5))
+            else
+                speedLabel.Text = "Hız: " .. string.format("%.1f", s)
+            end
         end
     end)
     setupSpeedIndicator(char)
@@ -6727,6 +6817,7 @@ function buildConfigTable()
         autoStealVariant = autoStealVariant or 1,
         katanaSkinEnabled = katanaSkinEnabled == true,
         katanaSkinColorMode = katanaSkinColorMode or "Red",
+        discordTextColorTheme = discordTextColorTheme or "White",
         minecraftBatSkinEnabled = minecraftBatSkinEnabled == true,
         medusaSkinChoice = medusaSkinChoice or (_G.RivalMedusaSkin or "Default"),
         minecraftBatSkinColorMode = minecraftBatSkinColorMode or "Default",
@@ -6926,6 +7017,10 @@ function loadAllSettings()
     _isLoading = true
     NS = data.normalSpeed or NS
     CS = data.carrySpeed or CS
+    pcall(function()
+        CarrySystem:setNormalSpeed(NS)
+        CarrySystem:setCarrySpeed(CS)
+    end)
     LAGGER_SPEED = data.laggerSpeed1 or LAGGER_SPEED
     LAGGER_CARRY_SPEED = data.laggerSpeed2 or LAGGER_CARRY_SPEED
     CONFIG.STEAL_RANGE = data.stealRadius or CONFIG.STEAL_RANGE
@@ -6967,6 +7062,8 @@ function loadAllSettings()
     katanaSkinEnabled = data.katanaSkinEnabled == true
     katanaSkinColorMode = data.katanaSkinColorMode or "Red"
     if KatanaColorSelector then KatanaColorSelector.Text = tostring(katanaSkinColorMode) .. "  ▼" end
+    discordTextColorTheme = data.discordTextColorTheme or "White"
+    pcall(function() applyDiscordTextColor(discordTextColorTheme) end)
     minecraftBatSkinEnabled = data.minecraftBatSkinEnabled == true
     if data.medusaSkinChoice and type(data.medusaSkinChoice) == "string" then
         medusaSkinChoice = data.medusaSkinChoice
@@ -8342,14 +8439,26 @@ local KatanaSkin = (function()
         part.Massless    = true
     end
 
-    local function weldToHandle(part, handle)
+    local function weldToHandle(part, handle, c0)
         if not part or not handle or not part:IsA("BasePart") or not handle:IsA("BasePart") then return end
         setPartSafe(part)
-        local w = Instance.new("WeldConstraint")
-        w.Name   = "FlowerSkin_AssetWeld"
-        w.Part0  = handle
-        w.Part1  = part
+        -- Remove old welds on this part
+        for _, ch in ipairs(part:GetChildren()) do
+            if ch:IsA("Weld") or ch:IsA("WeldConstraint") or ch:IsA("Motor6D") then
+                pcall(function() ch:Destroy() end)
+            end
+        end
+        local w = Instance.new("Weld")
+        w.Name  = "FlowerSkin_AssetWeld"
+        w.Part0 = handle
+        w.Part1 = part
+        w.C0    = c0 or CFrame.identity
+        w.C1    = CFrame.identity
         w.Parent = part
+        -- Snap part so it matches weld immediately
+        pcall(function()
+            part.CFrame = handle.CFrame * (c0 or CFrame.identity)
+        end)
     end
 
     local function rememberOriginal(tool)
@@ -8667,7 +8776,10 @@ local function newPart(parent, name, size, offset, color, material)
             pcall(function() model:PivotTo(handle.CFrame) end)
         end
         for _, inst in ipairs(model:GetDescendants()) do
-            if inst:IsA("BasePart") then weldToHandle(inst, handle) end
+            if inst:IsA("BasePart") then
+                local rel = handle.CFrame:ToObjectSpace(inst.CFrame)
+                weldToHandle(inst, handle, rel)
+            end
         end
 
         local vfxPart = model:FindFirstChild("SharpParts", true)
@@ -8694,24 +8806,27 @@ local function newPart(parent, name, size, offset, color, material)
         model.Parent = folder
 
         local parts = {}
-        local function add(name, size, offset, color, material)
-            local part, cfOffset = newPart(model, name, size, offset, color, material)
-            part.CFrame = handle.CFrame * cfOffset
-            weldToHandle(part, handle)
-            table.insert(parts, part)
-            return part
+        -- Base orient: align blade with typical Bat Handle long axis (Y),
+        -- slight tilt so it sits in the hand like a real sword grip.
+        local BASE = CFrame.Angles(math.rad(-8), math.rad(0), math.rad(5))
+        local function add(name, size, localCF, color, material)
+            local p = newPart(model, name, size, CFrame.identity, color, material)
+            local c0 = BASE * localCF
+            weldToHandle(p, handle, c0)
+            table.insert(parts, p)
+            return p
         end
 
         if skinName == "KATANA" then
             local KC = getKC()
-            -- Realistic-ish katana proportions (handle + long thin blade + guard)
-            add("Handle2", Vector3.new(0.18, 1.15, 0.18), CFrame.new(0, -0.95, 0), Color3.fromRGB(25, 20, 18), Enum.Material.SmoothPlastic)
-            add("TsukaWrap", Vector3.new(0.2, 0.95, 0.2), CFrame.new(0, -0.9, 0), Color3.fromRGB(40, 30, 28), Enum.Material.Fabric)
-            add("Tsuba", Vector3.new(0.55, 0.08, 0.55), CFrame.new(0, -0.32, 0), KC.gold, Enum.Material.Metal)
-            local sharp = add("SharpParts", Vector3.new(0.14, 3.8, 0.06), CFrame.new(0, 1.35, 0), KC.red2, Enum.Material.Neon)
-            add("WeaponPart", Vector3.new(0.18, 3.55, 0.045), CFrame.new(0.02, 1.3, 0), KC.red, Enum.Material.Neon)
-            add("BladeEdge", Vector3.new(0.06, 3.5, 0.03), CFrame.new(-0.06, 1.28, 0), Color3.fromRGB(240, 245, 255), Enum.Material.Metal)
-            add("NeonAccent", Vector3.new(0.5, 0.1, 0.35), CFrame.new(0, -0.32, 0), KC.gold, Enum.Material.Neon)
+            -- Grip zone (sits on tool Handle in palm) → blade extends +Y
+            add("Handle2", Vector3.new(0.22, 1.05, 0.22), CFrame.new(0, -0.55, 0), Color3.fromRGB(28, 22, 18), Enum.Material.SmoothPlastic)
+            add("TsukaWrap", Vector3.new(0.24, 0.9, 0.24), CFrame.new(0, -0.5, 0), Color3.fromRGB(45, 32, 28), Enum.Material.Fabric)
+            add("Tsuba", Vector3.new(0.62, 0.07, 0.42), CFrame.new(0, 0.05, 0), KC.gold, Enum.Material.Metal)
+            local sharp = add("SharpParts", Vector3.new(0.16, 3.2, 0.07), CFrame.new(0, 1.7, 0), KC.red2, Enum.Material.Neon)
+            add("WeaponPart", Vector3.new(0.2, 3.0, 0.05), CFrame.new(0.015, 1.65, 0), KC.red, Enum.Material.Neon)
+            add("BladeEdge", Vector3.new(0.05, 2.95, 0.03), CFrame.new(-0.05, 1.62, 0), Color3.fromRGB(235, 240, 255), Enum.Material.Metal)
+            add("NeonAccent", Vector3.new(0.48, 0.09, 0.32), CFrame.new(0, 0.05, 0), KC.gold, Enum.Material.Neon)
             addRedVFX(sharp)
         end
         model.PrimaryPart = parts[1]
@@ -10778,8 +10893,20 @@ function buildGui()
 
     local speedPage = contentPages["Speed"]
     mkSect(speedPage, "Speed Settings")
-    do local row = mkRow(speedPage, 38); mkLabel(row, "Normal Speed"); normalBox = mkBox(row, NS, 50, 56, function(v) if v > 0 and v <= 500 then NS = v end end) end
-    do local row = mkRow(speedPage, 38); mkLabel(row, "Carry Speed"); carryBox = mkBox(row, CS, 50, 56, function(v) if v > 0 and v <= 500 then CS = v end end) end
+    do local row = mkRow(speedPage, 38); mkLabel(row, "Normal Speed"); normalBox = mkBox(row, NS, 50, 56, function(v)
+        if v > 0 and v <= 500 then
+            NS = v
+            pcall(function() CarrySystem:setNormalSpeed(v) end)
+            pcall(saveAllSettings)
+        end
+    end) end
+    do local row = mkRow(speedPage, 38); mkLabel(row, "Carry Speed"); carryBox = mkBox(row, CS, 50, 56, function(v)
+        if v > 0 and v <= 500 then
+            CS = v
+            pcall(function() CarrySystem:setCarrySpeed(v) end)
+            pcall(saveAllSettings)
+        end
+    end) end
     do local row = mkRow(speedPage, 38); mkLabel(row, "Lagger Normal Speed"); laggerBox = mkBox(row, LAGGER_SPEED, 50, 56, function(v) if v > 0 and v <= 500 then LAGGER_SPEED = v end end) end
     do local row = mkRow(speedPage, 38); mkLabel(row, "Lagger Carry Speed"); lagger2Box = mkBox(row, LAGGER_CARRY_SPEED, 50, 56, function(v) if v > 0 and v <= 500 then LAGGER_CARRY_SPEED = v end end) end
     do
@@ -11585,6 +11712,17 @@ function buildGui()
             enableKatanaSkinOnly()
             pcall(saveAllSettings)
         end)
+    end
+
+    do
+        local discRow = mkRow(visualPage, 38)
+        mkLabel(discRow, "Discord Color")
+        discordColorSelectorLabel = mkDropdown(visualPage, discRow, discordTextColorTheme or "White", DISCORD_COLOR_ORDER, function(picked)
+            applyDiscordTextColor(tostring(picked or "White"))
+        end)
+        if discordColorSelectorLabel then
+            discordColorSelectorLabel.TextColor3 = getDiscordTextColor()
+        end
     end
 
     -- Button Color — same dropdown pattern as Bat Aimbot Mode (proven working)
