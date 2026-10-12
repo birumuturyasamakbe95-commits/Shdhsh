@@ -2029,9 +2029,27 @@ ANIM_PACKS = {
     ["Werewolf"] = { idle1="rbxassetid://1083195517", idle2="rbxassetid://1083195517", walk="rbxassetid://1083178339", run="rbxassetid://1083216690", jump="rbxassetid://1083218792", fall="rbxassetid://1083189019", climb="rbxassetid://1083182000", swim="rbxassetid://1083195517", swimidle="rbxassetid://1083195517" },
     ["Rthro"] = { idle1="rbxassetid://2510196951", idle2="rbxassetid://2510196951", walk="rbxassetid://2510202577", run="rbxassetid://2510198475", jump="rbxassetid://2510197830", fall="rbxassetid://2510195892", climb="rbxassetid://2510192778", swim="rbxassetid://2510196951", swimidle="rbxassetid://2510196951" },
     ["Stylish"] = { idle1="rbxassetid://616136790", idle2="rbxassetid://616136790", walk="rbxassetid://616146177", run="rbxassetid://616140816", jump="rbxassetid://616139451", fall="rbxassetid://616134815", climb="rbxassetid://616133594", swim="rbxassetid://616136790", swimidle="rbxassetid://616136790" },
+    -- adidas Sports Animation Pack
+    ["Adidas"] = {
+        idle1 = "rbxassetid://18538150608",
+        idle2 = "rbxassetid://18538150608",
+        walk  = "rbxassetid://18538146480",
+        run   = "rbxassetid://18538133604",
+        jump  = "rbxassetid://18538153691",
+        fall  = "rbxassetid://18538164337",
+        climb = "rbxassetid://18538170170",
+        swim  = "rbxassetid://18538158932",
+        swimidle = "rbxassetid://18538158932",
+    },
 }
 
-ANIM_PACK_ORDER = {{"Off", "Off"}, {"Zombie", "Zombie"}, {"Ninja", "Ninja"}, {"Knight", "Knight"}, {"Elder", "Elder"}, {"Levitate", "Levitate"}, {"Astronaut", "Astronaut"}, {"Pirate", "Pirate"}, {"Toy", "Toy"}, {"Vampire", "Vampire"}, {"Werewolf", "Werewolf"}, {"Rthro", "Rthro"}, {"Stylish", "Stylish"}}
+ANIM_PACK_ORDER = {
+    {"Off", "Off"}, {"Zombie", "Zombie"}, {"Ninja", "Ninja"}, {"Knight", "Knight"},
+    {"Elder", "Elder"}, {"Levitate", "Levitate"}, {"Astronaut", "Astronaut"},
+    {"Pirate", "Pirate"}, {"Toy", "Toy"}, {"Vampire", "Vampire"},
+    {"Werewolf", "Werewolf"}, {"Rthro", "Rthro"}, {"Stylish", "Stylish"},
+    {"Adidas", "Adidas"},
+}
 
 local function isPackAnim(id)
     for _, pack in pairs(ANIM_PACKS) do
