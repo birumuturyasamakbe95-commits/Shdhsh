@@ -8704,10 +8704,14 @@ local function newPart(parent, name, size, offset, color, material)
 
         if skinName == "KATANA" then
             local KC = getKC()
-            add("Handle2", Vector3.new(0.22, 1.0, 0.22), CFrame.new(0, -0.85, 0), Color3.new(0.04, 0.04, 0.045), Enum.Material.Metal)
-            local sharp = add("SharpParts", Vector3.new(0.22, 3.35, 0.12), CFrame.new(0, 1.05, 0), KC.red2, Enum.Material.Neon)
-            add("WeaponPart", Vector3.new(0.3, 2.7, 0.08), CFrame.new(0.08, 1.15, 0), KC.red, Enum.Material.Neon)
-            add("NeonAccent", Vector3.new(0.75, 0.12, 0.42), CFrame.new(0, -0.28, 0), KC.gold, Enum.Material.Neon)
+            -- Realistic-ish katana proportions (handle + long thin blade + guard)
+            add("Handle2", Vector3.new(0.18, 1.15, 0.18), CFrame.new(0, -0.95, 0), Color3.fromRGB(25, 20, 18), Enum.Material.SmoothPlastic)
+            add("TsukaWrap", Vector3.new(0.2, 0.95, 0.2), CFrame.new(0, -0.9, 0), Color3.fromRGB(40, 30, 28), Enum.Material.Fabric)
+            add("Tsuba", Vector3.new(0.55, 0.08, 0.55), CFrame.new(0, -0.32, 0), KC.gold, Enum.Material.Metal)
+            local sharp = add("SharpParts", Vector3.new(0.14, 3.8, 0.06), CFrame.new(0, 1.35, 0), KC.red2, Enum.Material.Neon)
+            add("WeaponPart", Vector3.new(0.18, 3.55, 0.045), CFrame.new(0.02, 1.3, 0), KC.red, Enum.Material.Neon)
+            add("BladeEdge", Vector3.new(0.06, 3.5, 0.03), CFrame.new(-0.06, 1.28, 0), Color3.fromRGB(240, 245, 255), Enum.Material.Metal)
+            add("NeonAccent", Vector3.new(0.5, 0.1, 0.35), CFrame.new(0, -0.32, 0), KC.gold, Enum.Material.Neon)
             addRedVFX(sharp)
         end
         model.PrimaryPart = parts[1]
@@ -8728,6 +8732,15 @@ local function newPart(parent, name, size, offset, color, material)
         end
         rememberOriginal(tool)
         removeSkin(tool)
+        -- Minecraft Bat visual kalıntısını temizle
+        pcall(function()
+            local mc = tool:FindFirstChild("CustomUnionVisual")
+            if mc then mc:Destroy() end
+            local handle = tool:FindFirstChild("Handle")
+            if handle then
+                handle.Transparency = 0
+            end
+        end)
         if skinName == "NONE" then
             State.LastBat = tool
             State.LastAppliedSkin = skinName
@@ -8748,7 +8761,7 @@ local function newPart(parent, name, size, offset, color, material)
                 fire.SecondaryColor = KC.red2
             end
         end
-        -- Tint exact mesh parts to selected katana color
+        -- Tint whole katana model to selected color (exact mesh + proxy)
         pcall(function()
             local KC = getKC()
             local folder = tool:FindFirstChild("FlowerSkin_KatanaRealistic")
@@ -8756,24 +8769,52 @@ local function newPart(parent, name, size, offset, color, material)
             for _, inst in ipairs(folder:GetDescendants()) do
                 if inst:IsA("BasePart") then
                     local n = string.lower(inst.Name)
-                    if n:find("sharp") or n:find("blade") or n:find("weapon") then
-                        inst.Color = KC.red
-                        if inst.Material == Enum.Material.Neon or true then
-                            -- keep neon accents vivid
-                        end
-                    elseif n:find("accent") or n:find("neon") then
+                    local isHandle = n:find("handle") or n:find("tsuka") or n:find("grip")
+                    local isGuard  = n:find("tsuba") or n:find("guard") or n:find("accent") or n:find("neon")
+                    local isEdge   = n:find("edge") or n:find("tip")
+                    if isHandle then
+                        -- keep dark handle
+                    elseif isGuard then
                         inst.Color = KC.gold
+                        inst.Material = Enum.Material.Neon
+                    elseif isEdge then
+                        inst.Color = Color3.fromRGB(240, 245, 255)
+                    else
+                        -- blade / body / unknown mesh parts -> primary color
+                        inst.Color = KC.red
+                        pcall(function()
+                            if inst:IsA("MeshPart") then
+                                -- force visible tint over baked textures
+                                inst.TextureID = ""
+                            end
+                            if inst:IsA("UnionOperation") then
+                                inst.UsePartColor = true
+                            end
+                        end)
+                        local sm = inst:FindFirstChildWhichIsA("SpecialMesh")
+                        if sm then
+                            pcall(function()
+                                sm.VertexColor = Vector3.new(KC.red.R, KC.red.G, KC.red.B)
+                            end)
+                        end
+                        if n:find("sharp") or n:find("blade") or n:find("weapon") or n:find("katana") then
+                            inst.Material = Enum.Material.Neon
+                            inst.Color = KC.red2
+                        end
                     end
-                elseif inst:IsA("Trail") and inst.Name:find("FlowerSkin") then
+                elseif inst:IsA("Trail") then
                     inst.Color = ColorSequence.new({
                         ColorSequenceKeypoint.new(0, KC.red2),
                         ColorSequenceKeypoint.new(1, KC.red),
                     })
-                elseif inst:IsA("ParticleEmitter") and inst.Name:find("FlowerSkin") then
+                elseif inst:IsA("ParticleEmitter") then
                     inst.Color = ColorSequence.new({
                         ColorSequenceKeypoint.new(0, KC.red),
                         ColorSequenceKeypoint.new(1, KC.red2),
                     })
+                elseif inst:IsA("Fire") then
+                    inst.Color = KC.red
+                    inst.SecondaryColor = KC.red2
                 end
             end
         end)
@@ -9004,7 +9045,7 @@ end)()
 
 task.spawn(function()
     while true do
-        if minecraftBatSkinEnabled then
+        if minecraftBatSkinEnabled and not katanaSkinEnabled then
             MinecraftBatSkin.State.enabled = true
             local tool = MinecraftBatSkin.FindBat()
             if tool and not tool:FindFirstChild("CustomUnionVisual") then
@@ -11429,10 +11470,46 @@ function buildGui()
         end)
     end
 
-    local katanaSkinSetVisual = mkToggle(visualPage, "Bat Skin (Katana)", function(on)
+    local katanaSkinSetVisual
+    local function enableKatanaSkinOnly()
+        -- Minecraft Bat ile aynı anda olmasın (görünümü ezer)
+        if minecraftBatSkinEnabled then
+            minecraftBatSkinEnabled = false
+            if MinecraftBatSkin then
+                MinecraftBatSkin.State.enabled = false
+                pcall(function() MinecraftBatSkin.Remove() end)
+            end
+            if MinecraftBatSetVisual then pcall(MinecraftBatSetVisual, false) end
+        end
+        katanaSkinEnabled = true
+        pcall(function()
+            if KatanaSkin and KatanaSkin.SetColorMode then
+                KatanaSkin.SetColorMode(katanaSkinColorMode or "Red")
+            else
+                KatanaSkin.ApplySkin("KATANA")
+            end
+        end)
+        if katanaSkinSetVisual then pcall(katanaSkinSetVisual, true) end
+    end
+
+    katanaSkinSetVisual = mkToggle(visualPage, "Bat Skin (Katana)", function(on)
         katanaSkinEnabled = on
         if on then
-            pcall(function() KatanaSkin.ApplySkin("KATANA") end)
+            if minecraftBatSkinEnabled then
+                minecraftBatSkinEnabled = false
+                if MinecraftBatSkin then
+                    MinecraftBatSkin.State.enabled = false
+                    pcall(function() MinecraftBatSkin.Remove() end)
+                end
+                if MinecraftBatSetVisual then pcall(MinecraftBatSetVisual, false) end
+            end
+            pcall(function()
+                if KatanaSkin and KatanaSkin.SetColorMode then
+                    KatanaSkin.SetColorMode(katanaSkinColorMode or "Red")
+                else
+                    KatanaSkin.ApplySkin("KATANA")
+                end
+            end)
         else
             pcall(function() KatanaSkin.ApplySkin("NONE") end)
         end
@@ -11446,6 +11523,12 @@ function buildGui()
             MinecraftBatSkin.State.enabled = on
         end
         if on then
+            -- Katana ile çakışmasın
+            if katanaSkinEnabled then
+                katanaSkinEnabled = false
+                pcall(function() KatanaSkin.ApplySkin("NONE") end)
+                if katanaSkinSetVisual then pcall(katanaSkinSetVisual, false) end
+            end
             pcall(function() MinecraftBatSkin.Apply() end)
         else
             pcall(function() MinecraftBatSkin.Remove() end)
@@ -11466,12 +11549,23 @@ function buildGui()
             if MinecraftBatColorSelector then
                 MinecraftBatColorSelector.Text = minecraftBatSkinColorMode .. "  ▼"
             end
+            -- MC renk seçince Minecraft Bat açılsın, Katana kapansın
+            if not minecraftBatSkinEnabled then
+                minecraftBatSkinEnabled = true
+                if MinecraftBatSkin then MinecraftBatSkin.State.enabled = true end
+                if MinecraftBatSetVisual then pcall(MinecraftBatSetVisual, true) end
+            end
+            if katanaSkinEnabled then
+                katanaSkinEnabled = false
+                pcall(function() KatanaSkin.ApplySkin("NONE") end)
+                if katanaSkinSetVisual then pcall(katanaSkinSetVisual, false) end
+            end
             pcall(function()
                 if MinecraftBatSkin and MinecraftBatSkin.SetColorMode then
                     MinecraftBatSkin.SetColorMode(minecraftBatSkinColorMode)
                 end
             end)
-            if minecraftBatSkinEnabled then pcall(function() MinecraftBatSkin.Apply() end) end
+            pcall(function() MinecraftBatSkin.Apply() end)
             pcall(saveAllSettings)
         end)
     end
@@ -11487,13 +11581,8 @@ function buildGui()
             if KatanaColorSelector then
                 KatanaColorSelector.Text = katanaSkinColorMode .. "  ▼"
             end
-            pcall(function()
-                if KatanaSkin and KatanaSkin.SetColorMode then
-                    KatanaSkin.SetColorMode(katanaSkinColorMode)
-                elseif katanaSkinEnabled then
-                    KatanaSkin.ApplySkin("KATANA")
-                end
-            end)
+            -- Katana renk seçince otomatik katana skin aç, MC bat kapat
+            enableKatanaSkinOnly()
             pcall(saveAllSettings)
         end)
     end
