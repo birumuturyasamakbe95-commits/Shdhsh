@@ -1666,6 +1666,11 @@ local CoreGui = game:GetService("CoreGui")
 infJumpEnabled = false
 infJumpMode    = "HOLD" -- "HOLD" | "MANUAL"
 infJumpModeLabel = nil
+-- Inf Jump X-spin: one full flip per jump, only while holding pet
+infJumpSpinSpeed = 1.0 -- 0.5..5 : how fast one 360° X rotation completes (higher = faster)
+infJumpSpinBusy = false
+infJumpSpinConn = nil
+infJumpSpinSpeedLabel = nil
 if batDesyncTpEnabled == nil then batDesyncTpEnabled = false end
 if dropActive == nil then dropActive = false end
 
@@ -1681,7 +1686,75 @@ function _G._jumpEnsureProxy()
     return char:FindFirstChild("HumanoidRootPart")
 end
 
-function _G.SakuraVsApplyNormalInfJumpBoost(boost)
+function _G.SakuraVsTryInfJumpSpin()
+    -- One full X-axis rotation per jump, only when holding pet / carrying
+    if not infJumpEnabled then return end
+    if infJumpSpinBusy then return end
+    local holding = false
+    pcall(function()
+        if CarrySystem and CarrySystem.isCarrying then
+            holding = CarrySystem:isCarrying() == true
+        end
+    end)
+    if not holding then return end
+    local char = LP.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local speed = tonumber(infJumpSpinSpeed) or 1
+    if speed < 0.25 then speed = 0.25 end
+    if speed > 8 then speed = 8 end
+    -- duration for one 360° spin (speed 1 ≈ 0.45s)
+    local duration = 0.45 / speed
+    infJumpSpinBusy = true
+    if infJumpSpinConn then
+        pcall(function() infJumpSpinConn:Disconnect() end)
+        infJumpSpinConn = nil
+    end
+    local startT = _tick()
+    local spun = 0
+    infJumpSpinConn = RunService.Heartbeat:Connect(function(dt)
+        if not infJumpEnabled then
+            if infJumpSpinConn then infJumpSpinConn:Disconnect() end
+            infJumpSpinConn = nil
+            infJumpSpinBusy = false
+            return
+        end
+        local ch = LP.Character
+        local root = ch and ch:FindFirstChild("HumanoidRootPart")
+        if not root then
+            if infJumpSpinConn then infJumpSpinConn:Disconnect() end
+            infJumpSpinConn = nil
+            infJumpSpinBusy = false
+            return
+        end
+        local elapsed = _tick() - startT
+        local t = elapsed / duration
+        if t >= 1 then
+            -- finish remaining angle so we land near upright X
+            local remain = math.rad(360 - spun)
+            if remain > 0.001 then
+                pcall(function()
+                    root.CFrame = root.CFrame * CFrame.Angles(remain, 0, 0)
+                end)
+            end
+            if infJumpSpinConn then infJumpSpinConn:Disconnect() end
+            infJumpSpinConn = nil
+            infJumpSpinBusy = false
+            return
+        end
+        local target = 360 * t
+        local delta = target - spun
+        spun = target
+        if delta ~= 0 then
+            pcall(function()
+                root.CFrame = root.CFrame * CFrame.Angles(math.rad(delta), 0, 0)
+            end)
+        end
+    end)
+end
+
+function _G.SakuraVsApplyNormalInfJumpBoost(boost, allowSpin)
     if not infJumpEnabled then return end
     if batDesyncTpEnabled then return end
     if dropActive then return end
@@ -1697,6 +1770,10 @@ function _G.SakuraVsApplyNormalInfJumpBoost(boost)
     pcall(function()
         proxy.Velocity = _V3new(proxy.Velocity.X, y, proxy.Velocity.Z)
     end)
+    -- Spin only on real jump presses (not continuous HOLD heartbeat)
+    if allowSpin then
+        pcall(_G.SakuraVsTryInfJumpSpin)
+    end
 end
 
 function _G.SakuraVsStopNormalInfJumpHoldState()
@@ -1708,11 +1785,11 @@ function _G.SakuraVsStopNormalInfJumpHoldState()
     S.mobileActive = false
 end
 
--- JumpRequest: MANUAL + HOLD (tek basista da zıplasın)
+-- JumpRequest: MANUAL + HOLD (tek basista da zıplasın + pet varken 1 tur X spin)
 UIS.JumpRequest:Connect(function()
     if not infJumpEnabled then return end
     if UIS:GetFocusedTextBox() then return end
-    _G.SakuraVsApplyNormalInfJumpBoost(50)
+    _G.SakuraVsApplyNormalInfJumpBoost(50, true)
 end)
 
 UIS.InputBegan:Connect(function(input)
@@ -1726,7 +1803,7 @@ UIS.InputBegan:Connect(function(input)
         task.delay(0.12, function()
             if _G.SakuraVsNormalInfJump.holdPressed and infJumpEnabled then
                 _G.SakuraVsNormalInfJump.holdActive = true
-                _G.SakuraVsApplyNormalInfJumpBoost(50)
+                _G.SakuraVsApplyNormalInfJumpBoost(50, true)
             end
         end)
     elseif input.KeyCode == Enum.KeyCode.ButtonA
@@ -1761,7 +1838,7 @@ function _G.SakuraVsHookNormalInfMobileJumpButton(obj)
         task.delay(0.12, function()
             if S.mobilePressed and infJumpEnabled then
                 S.mobileActive = true
-                _G.SakuraVsApplyNormalInfJumpBoost(50)
+                _G.SakuraVsApplyNormalInfJumpBoost(50, true)
             end
         end)
     end)
@@ -1789,7 +1866,8 @@ RunService.Heartbeat:Connect(function()
     local S = _G.SakuraVsNormalInfJump
     if infJumpEnabled and infJumpMode == "HOLD"
        and (S.holdActive or S.mobileActive or S.controllerActive) then
-        _G.SakuraVsApplyNormalInfJumpBoost(50)
+        -- continuous HOLD boost: no spin (spin only on jump press)
+        _G.SakuraVsApplyNormalInfJumpBoost(50, false)
     end
 end)
 
@@ -1797,6 +1875,11 @@ function _G.setInfJumpInternal(on)
     infJumpEnabled = on and true or false
     if not infJumpEnabled then
         _G.SakuraVsStopNormalInfJumpHoldState()
+        if infJumpSpinConn then
+            pcall(function() infJumpSpinConn:Disconnect() end)
+            infJumpSpinConn = nil
+        end
+        infJumpSpinBusy = false
         local ch = LP.Character
         local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
         if hrp then
@@ -6724,6 +6807,7 @@ function buildConfigTable()
         batCounterV3Stud = tonumber(BAT_COUNTER_V2_TOUCH_DIST) or 2.5,
         infiniteJump = (InfiniteJump and InfiniteJump.isRunning and InfiniteJump.isRunning()) == true,
         infJumpMode = infJumpMode or "HOLD",
+        infJumpSpinSpeed = tonumber(infJumpSpinSpeed) or 1,
         autoStealVariant = autoStealVariant or 1,
         katanaSkinEnabled = katanaSkinEnabled == true,
         minecraftBatSkinEnabled = minecraftBatSkinEnabled == true,
@@ -6961,6 +7045,15 @@ function loadAllSettings()
     end
     infJumpMode = (data.infJumpMode == "MANUAL") and "MANUAL" or "HOLD"
     if infJumpModeLabel then infJumpModeLabel.Text = tostring(infJumpMode or "HOLD") .. "  ▼" end
+    do
+        local v = tonumber(data.infJumpSpinSpeed) or 1
+        if v < 0.3 then v = 0.3 end
+        if v > 5 then v = 5 end
+        infJumpSpinSpeed = v
+        if infJumpSpinSpeedLabel then
+            infJumpSpinSpeedLabel.Text = string.format("%.1f", v)
+        end
+    end
     autoStealVariant = _clamp(tonumber(data.autoStealVariant) or 1, 1, 3)
     if autoStealVariantLabel then autoStealVariantLabel.Text = autoStealVariantName(autoStealVariant) end
     katanaSkinEnabled = data.katanaSkinEnabled == true
@@ -11706,6 +11799,65 @@ function buildGui()
             refreshOpts()
         end)
         refreshOpts()
+    end
+
+    -- Jump Spin Speed (+ / -): how fast one X-axis flip completes (pet + jump only)
+    do
+        local row = mkRow(visualPage, 38)
+        mkLabel(row, "Jump Spin")
+        local container = Instance.new("Frame", row)
+        container.Size = UDim2.new(0, 130, 1, 0)
+        container.Position = UDim2.new(1, -138, 0, 0)
+        container.BackgroundTransparency = 1
+        container.ZIndex = 8
+        local minusBtn = Instance.new("TextButton", container)
+        minusBtn.Size = UDim2.new(0, 28, 0, 26)
+        minusBtn.Position = UDim2.new(0, 0, 0.5, -13)
+        minusBtn.BackgroundColor3 = INP
+        minusBtn.BackgroundTransparency = 0.2
+        minusBtn.BorderSizePixel = 0
+        minusBtn.Text = "-"
+        minusBtn.TextColor3 = WHITE
+        minusBtn.Font = Enum.Font.GothamBold
+        minusBtn.TextSize = 16
+        minusBtn.AutoButtonColor = false
+        minusBtn.ZIndex = 9
+        Instance.new("UICorner", minusBtn).CornerRadius = UDim.new(0, 6)
+        local valLbl = Instance.new("TextLabel", container)
+        valLbl.Size = UDim2.new(0, 58, 0, 26)
+        valLbl.Position = UDim2.new(0.5, -29, 0.5, -13)
+        valLbl.BackgroundTransparency = 1
+        valLbl.Text = string.format("%.1f", tonumber(infJumpSpinSpeed) or 1)
+        valLbl.TextColor3 = WHITE
+        valLbl.Font = Enum.Font.GothamBold
+        valLbl.TextSize = 13
+        valLbl.TextXAlignment = Enum.TextXAlignment.Center
+        valLbl.ZIndex = 9
+        infJumpSpinSpeedLabel = valLbl
+        local plusBtn = Instance.new("TextButton", container)
+        plusBtn.Size = UDim2.new(0, 28, 0, 26)
+        plusBtn.Position = UDim2.new(1, -28, 0.5, -13)
+        plusBtn.BackgroundColor3 = INP
+        plusBtn.BackgroundTransparency = 0.2
+        plusBtn.BorderSizePixel = 0
+        plusBtn.Text = "+"
+        plusBtn.TextColor3 = WHITE
+        plusBtn.Font = Enum.Font.GothamBold
+        plusBtn.TextSize = 16
+        plusBtn.AutoButtonColor = false
+        plusBtn.ZIndex = 9
+        Instance.new("UICorner", plusBtn).CornerRadius = UDim.new(0, 6)
+        local function bump(delta)
+            local v = tonumber(infJumpSpinSpeed) or 1
+            v = math.floor((v + delta) * 10 + 0.5) / 10
+            if v < 0.3 then v = 0.3 end
+            if v > 5 then v = 5 end
+            infJumpSpinSpeed = v
+            valLbl.Text = string.format("%.1f", v)
+            pcall(saveAllSettings)
+        end
+        minusBtn.MouseButton1Click:Connect(function() bump(-0.2) end)
+        plusBtn.MouseButton1Click:Connect(function() bump(0.2) end)
     end
 
     do
