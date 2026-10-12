@@ -1708,7 +1708,7 @@ function _G.SakuraVsStopNormalInfJumpHoldState()
     S.mobileActive = false
 end
 
--- JumpRequest: MANUAL + HOLD (tek basista da zıplasın + pet varken 1 tur X spin)
+-- JumpRequest: MANUAL + HOLD (tek basista da zıplasın)
 UIS.JumpRequest:Connect(function()
     if not infJumpEnabled then return end
     if UIS:GetFocusedTextBox() then return end
@@ -1946,27 +1946,9 @@ ANIM_PACKS = {
     ["Werewolf"] = { idle1="rbxassetid://1083195517", idle2="rbxassetid://1083195517", walk="rbxassetid://1083178339", run="rbxassetid://1083216690", jump="rbxassetid://1083218792", fall="rbxassetid://1083189019", climb="rbxassetid://1083182000", swim="rbxassetid://1083195517", swimidle="rbxassetid://1083195517" },
     ["Rthro"] = { idle1="rbxassetid://2510196951", idle2="rbxassetid://2510196951", walk="rbxassetid://2510202577", run="rbxassetid://2510198475", jump="rbxassetid://2510197830", fall="rbxassetid://2510195892", climb="rbxassetid://2510192778", swim="rbxassetid://2510196951", swimidle="rbxassetid://2510196951" },
     ["Stylish"] = { idle1="rbxassetid://616136790", idle2="rbxassetid://616136790", walk="rbxassetid://616146177", run="rbxassetid://616140816", jump="rbxassetid://616139451", fall="rbxassetid://616134815", climb="rbxassetid://616133594", swim="rbxassetid://616136790", swimidle="rbxassetid://616136790" },
-    -- adidas Community Animation Pack
-    ["Adidas"] = {
-        idle1 = "rbxassetid://126354114956642",
-        idle2 = "rbxassetid://126354114956642",
-        walk  = "rbxassetid://106810508343012",
-        run   = "rbxassetid://124765145869332",
-        jump  = "rbxassetid://115715495289805",
-        fall  = "rbxassetid://93993406355955",
-        climb = "rbxassetid://123695349157584",
-        swim  = "rbxassetid://106537993816942",
-        swimidle = "rbxassetid://106537993816942",
-    },
 }
 
-ANIM_PACK_ORDER = {
-    {"Off", "Off"}, {"Zombie", "Zombie"}, {"Ninja", "Ninja"}, {"Knight", "Knight"},
-    {"Elder", "Elder"}, {"Levitate", "Levitate"}, {"Astronaut", "Astronaut"},
-    {"Pirate", "Pirate"}, {"Toy", "Toy"}, {"Vampire", "Vampire"},
-    {"Werewolf", "Werewolf"}, {"Rthro", "Rthro"}, {"Stylish", "Stylish"},
-    {"Adidas", "Adidas"},
-}
+ANIM_PACK_ORDER = {{"Off", "Off"}, {"Zombie", "Zombie"}, {"Ninja", "Ninja"}, {"Knight", "Knight"}, {"Elder", "Elder"}, {"Levitate", "Levitate"}, {"Astronaut", "Astronaut"}, {"Pirate", "Pirate"}, {"Toy", "Toy"}, {"Vampire", "Vampire"}, {"Werewolf", "Werewolf"}, {"Rthro", "Rthro"}, {"Stylish", "Stylish"}}
 
 local function isPackAnim(id)
     for _, pack in pairs(ANIM_PACKS) do
@@ -6744,6 +6726,7 @@ function buildConfigTable()
         infJumpMode = infJumpMode or "HOLD",
         autoStealVariant = autoStealVariant or 1,
         katanaSkinEnabled = katanaSkinEnabled == true,
+        katanaSkinColorMode = katanaSkinColorMode or "Red",
         minecraftBatSkinEnabled = minecraftBatSkinEnabled == true,
         medusaSkinChoice = medusaSkinChoice or (_G.RivalMedusaSkin or "Default"),
         minecraftBatSkinColorMode = minecraftBatSkinColorMode or "Default",
@@ -6982,6 +6965,8 @@ function loadAllSettings()
     autoStealVariant = _clamp(tonumber(data.autoStealVariant) or 1, 1, 3)
     if autoStealVariantLabel then autoStealVariantLabel.Text = autoStealVariantName(autoStealVariant) end
     katanaSkinEnabled = data.katanaSkinEnabled == true
+    katanaSkinColorMode = data.katanaSkinColorMode or "Red"
+    if KatanaColorSelector then KatanaColorSelector.Text = tostring(katanaSkinColorMode) .. "  ▼" end
     minecraftBatSkinEnabled = data.minecraftBatSkinEnabled == true
     if data.medusaSkinChoice and type(data.medusaSkinChoice) == "string" then
         medusaSkinChoice = data.medusaSkinChoice
@@ -6993,7 +6978,7 @@ function loadAllSettings()
         end)
     end
     minecraftBatSkinColorMode = data.minecraftBatSkinColorMode or "Default"
-    if MinecraftBatColorSelector then MinecraftBatColorSelector.Text = minecraftBatSkinColorMode end
+    if MinecraftBatColorSelector then MinecraftBatColorSelector.Text = tostring(minecraftBatSkinColorMode) .. "  ▼" end
     if MinecraftBatSetVisual then MinecraftBatSetVisual(minecraftBatSkinEnabled) end
     if minecraftBatSkinEnabled then
         task.defer(function()
@@ -7007,7 +6992,15 @@ function loadAllSettings()
         end)
     end
     if katanaSkinEnabled then
-        task.defer(function() pcall(function() KatanaSkin.ApplySkin("KATANA") end) end)
+        task.defer(function()
+            pcall(function()
+                if KatanaSkin and KatanaSkin.SetColorMode then
+                    KatanaSkin.SetColorMode(katanaSkinColorMode or "Red")
+                else
+                    KatanaSkin.ApplySkin("KATANA")
+                end
+            end)
+        end)
     end
     antiBatEnabled = data.antiBatEnabled or false
     if antiBatEnabled then
@@ -7286,7 +7279,7 @@ function loadAllSettings()
     if data.minecraftBatSkinColorMode then
         minecraftBatSkinColorMode = data.minecraftBatSkinColorMode
         if MinecraftBatColorSelector then
-            MinecraftBatColorSelector.Text = minecraftBatSkinColorMode
+            MinecraftBatColorSelector.Text = tostring(minecraftBatSkinColorMode) .. "  ▼"
         end
         pcall(function()
             if MinecraftBatSkin and MinecraftBatSkin.SetColorMode then
@@ -8278,6 +8271,8 @@ end
 -- PERSONALIZATION: BAT SKINS (Sakura.vs) — Katana + Minecraft
 -- ============================================================
 katanaSkinEnabled = false
+katanaSkinColorMode = "Red"
+KatanaColorSelector = nil
 
 local KatanaSkin = (function()
     local Players       = game:GetService("Players")
@@ -8286,11 +8281,30 @@ local KatanaSkin = (function()
     local ReplicatedStorage2 = game:GetService("ReplicatedStorage")
     local LocalPlayer   = Players.LocalPlayer
 
-    local KC = {
-        red  = Color3.new(0.784314, 0, 0),
-        red2 = Color3.new(1, 0.392157, 0.392157),
-        gold = Color3.new(1, 0.72549, 0.196078),
+    local KATANA_COLOR_PRESETS = {
+        ["Red"]    = { primary = Color3.fromRGB(200, 0, 0),     secondary = Color3.fromRGB(255, 100, 100), accent = Color3.fromRGB(255, 185, 50)  },
+        ["Blue"]   = { primary = Color3.fromRGB(30, 90, 255),   secondary = Color3.fromRGB(120, 180, 255), accent = Color3.fromRGB(80, 200, 255)  },
+        ["Yellow"] = { primary = Color3.fromRGB(255, 210, 30),  secondary = Color3.fromRGB(255, 240, 120), accent = Color3.fromRGB(255, 170, 40)  },
+        ["Purple"] = { primary = Color3.fromRGB(150, 50, 230),  secondary = Color3.fromRGB(200, 140, 255), accent = Color3.fromRGB(255, 120, 220) },
+        ["Mor"]    = { primary = Color3.fromRGB(130, 40, 200),  secondary = Color3.fromRGB(180, 100, 255), accent = Color3.fromRGB(220, 80, 255)  },
+        ["Green"]  = { primary = Color3.fromRGB(30, 220, 80),   secondary = Color3.fromRGB(120, 255, 160), accent = Color3.fromRGB(200, 255, 80)  },
+        ["White"]  = { primary = Color3.fromRGB(240, 240, 255), secondary = Color3.fromRGB(200, 210, 255), accent = Color3.fromRGB(255, 255, 255) },
+        ["Orange"] = { primary = Color3.fromRGB(255, 120, 20),  secondary = Color3.fromRGB(255, 180, 80),  accent = Color3.fromRGB(255, 220, 100) },
     }
+
+    local function getKatanaPalette()
+        local mode = tostring(katanaSkinColorMode or "Red")
+        return KATANA_COLOR_PRESETS[mode] or KATANA_COLOR_PRESETS["Red"]
+    end
+
+    local function getKC()
+        local p = getKatanaPalette()
+        return {
+            red  = p.primary,
+            red2 = p.secondary,
+            gold = p.accent,
+        }
+    end
 
     local State = {
         Skin = "KATANA",
@@ -8302,6 +8316,7 @@ local KatanaSkin = (function()
         ExactTemplateSearched = {},
         ExactAssetIds = { KATANA = "" },
         Original = {},
+        ColorMode = "Red",
     }
 
     local function findBatForKatanaSkin()
@@ -8406,6 +8421,7 @@ local KatanaSkin = (function()
 
     local function addRedVFX(parentPart)
         if not parentPart or not parentPart:IsA("BasePart") then return end
+        local KC = getKC()
         local existing = parentPart:FindFirstChild("FlowerSkin_ExtraRedVFX")
         if existing then existing:Destroy() end
 
@@ -8425,7 +8441,7 @@ local KatanaSkin = (function()
         trail.Attachment1 = bottom
         trail.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, KC.red2),
-            ColorSequenceKeypoint.new(1, Color3.new(0.54902, 0, 0)),
+            ColorSequenceKeypoint.new(1, KC.red),
         })
         trail.Transparency = NumberSequence.new({
             NumberSequenceKeypoint.new(0, 0.35),
@@ -8438,7 +8454,7 @@ local KatanaSkin = (function()
         local emitter = Instance.new("ParticleEmitter")
         emitter.Name = "FlowerSkin_ExtraRedVFX"
         emitter.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.new(0.784314, 0, 0)),
+            ColorSequenceKeypoint.new(0, KC.red),
             ColorSequenceKeypoint.new(1, KC.red2),
         })
         emitter.LightEmission = 0.55
@@ -8454,7 +8470,8 @@ local KatanaSkin = (function()
         emitter.Parent = parentPart
     end
 
-    local function newPart(parent, name, size, offset, color, material)
+    
+local function newPart(parent, name, size, offset, color, material)
         local p = Instance.new("Part")
         p.Name = name
         p.Size = size
@@ -8686,6 +8703,7 @@ local KatanaSkin = (function()
         end
 
         if skinName == "KATANA" then
+            local KC = getKC()
             add("Handle2", Vector3.new(0.22, 1.0, 0.22), CFrame.new(0, -0.85, 0), Color3.new(0.04, 0.04, 0.045), Enum.Material.Metal)
             local sharp = add("SharpParts", Vector3.new(0.22, 3.35, 0.12), CFrame.new(0, 1.05, 0), KC.red2, Enum.Material.Neon)
             add("WeaponPart", Vector3.new(0.3, 2.7, 0.08), CFrame.new(0.08, 1.15, 0), KC.red, Enum.Material.Neon)
@@ -8722,6 +8740,7 @@ local KatanaSkin = (function()
         end
         local handle = tool:FindFirstChild("Handle")
         if handle then
+            local KC = getKC()
             local fire = handle:FindFirstChildOfClass("Fire") or handle:FindFirstChild("Fire")
             if fire and fire:IsA("Fire") then
                 fire.Enabled = true
@@ -8729,6 +8748,35 @@ local KatanaSkin = (function()
                 fire.SecondaryColor = KC.red2
             end
         end
+        -- Tint exact mesh parts to selected katana color
+        pcall(function()
+            local KC = getKC()
+            local folder = tool:FindFirstChild("FlowerSkin_KatanaRealistic")
+            if not folder then return end
+            for _, inst in ipairs(folder:GetDescendants()) do
+                if inst:IsA("BasePart") then
+                    local n = string.lower(inst.Name)
+                    if n:find("sharp") or n:find("blade") or n:find("weapon") then
+                        inst.Color = KC.red
+                        if inst.Material == Enum.Material.Neon or true then
+                            -- keep neon accents vivid
+                        end
+                    elseif n:find("accent") or n:find("neon") then
+                        inst.Color = KC.gold
+                    end
+                elseif inst:IsA("Trail") and inst.Name:find("FlowerSkin") then
+                    inst.Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, KC.red2),
+                        ColorSequenceKeypoint.new(1, KC.red),
+                    })
+                elseif inst:IsA("ParticleEmitter") and inst.Name:find("FlowerSkin") then
+                    inst.Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, KC.red),
+                        ColorSequenceKeypoint.new(1, KC.red2),
+                    })
+                end
+            end
+        end)
         State.LastBat = tool
         State.LastAppliedSkin = skinName
         return true
@@ -8737,6 +8785,13 @@ local KatanaSkin = (function()
     return {
         State = State,
         ApplySkin = applySkin,
+        SetColorMode = function(mode)
+            State.ColorMode = tostring(mode or "Red")
+            katanaSkinColorMode = State.ColorMode
+            if katanaSkinEnabled then
+                applySkin("KATANA")
+            end
+        end,
         SetExactAssetId = function(assetId)
             State.ExactAssetIds.KATANA = tostring(assetId or "")
             State.ExactTemplateSearched.KATANA = nil
@@ -8784,6 +8839,7 @@ local MinecraftBatSkin = (function()
 
     local MB_COLORS = {
         ["Default"]       = nil,
+        ["Red"]           = Color3.fromRGB(230, 30, 40),
         ["Abyss Blue"]    = Color3.fromRGB(0, 40, 150),
         ["Venom Green"]   = Color3.fromRGB(20, 255, 50),
         ["Royal Gold"]    = Color3.fromRGB(255, 200, 0),
@@ -11401,29 +11457,43 @@ function buildGui()
     do
         local mcColorRow = mkRow(visualPage, 38)
         mkLabel(mcColorRow, "MC Bat Color")
-        MinecraftBatColorSelector = mkSelector(mcColorRow, minecraftBatSkinColorMode or "Default", {
-            "Default", "Abyss Blue", "Venom Green", "Royal Gold",
+        local mcColorOptions = {
+            "Default", "Red", "Abyss Blue", "Venom Green", "Royal Gold",
             "Velvet Rose", "Crimson Night", "RGB",
-        }, function(dir, updateLabel)
-            local options = {
-                "Default", "Abyss Blue", "Venom Green", "Royal Gold",
-                "Velvet Rose", "Crimson Night", "RGB"
-            }
-            local idx = 1
-            for i, name in ipairs(options) do
-                if name == minecraftBatSkinColorMode then idx = i; break end
+        }
+        MinecraftBatColorSelector = mkDropdown(visualPage, mcColorRow, minecraftBatSkinColorMode or "Default", mcColorOptions, function(picked)
+            minecraftBatSkinColorMode = tostring(picked or "Default")
+            if MinecraftBatColorSelector then
+                MinecraftBatColorSelector.Text = minecraftBatSkinColorMode .. "  ▼"
             end
-            idx = idx + dir
-            if idx < 1 then idx = #options end
-            if idx > #options then idx = 1 end
-            minecraftBatSkinColorMode = options[idx]
-            updateLabel(minecraftBatSkinColorMode)
             pcall(function()
                 if MinecraftBatSkin and MinecraftBatSkin.SetColorMode then
                     MinecraftBatSkin.SetColorMode(minecraftBatSkinColorMode)
                 end
             end)
             if minecraftBatSkinEnabled then pcall(function() MinecraftBatSkin.Apply() end) end
+            pcall(saveAllSettings)
+        end)
+    end
+
+    do
+        local katColorRow = mkRow(visualPage, 38)
+        mkLabel(katColorRow, "Katana Color")
+        local katColorOptions = {
+            "Red", "Blue", "Yellow", "Purple", "Mor", "Green", "White", "Orange",
+        }
+        KatanaColorSelector = mkDropdown(visualPage, katColorRow, katanaSkinColorMode or "Red", katColorOptions, function(picked)
+            katanaSkinColorMode = tostring(picked or "Red")
+            if KatanaColorSelector then
+                KatanaColorSelector.Text = katanaSkinColorMode .. "  ▼"
+            end
+            pcall(function()
+                if KatanaSkin and KatanaSkin.SetColorMode then
+                    KatanaSkin.SetColorMode(katanaSkinColorMode)
+                elseif katanaSkinEnabled then
+                    KatanaSkin.ApplySkin("KATANA")
+                end
+            end)
             pcall(saveAllSettings)
         end)
     end
@@ -11726,9 +11796,6 @@ function buildGui()
         refreshOpts()
     end
 
-    do
-        local row = mkRow(visualPage, 38)
-        mkLabel(row, "Stretch Rez")
     do
         local row = mkRow(visualPage, 38)
         mkLabel(row, "Stretch Rez")
@@ -13595,8 +13662,16 @@ function updateUIFromLoaded()
     if uiScaleBox then uiScaleBox.Text = tostring(uiScaleValue) end
     -- Sync MC Bat color label + Ping Lagger power UI if already created
     if MinecraftBatColorSelector then
-        MinecraftBatColorSelector.Text = tostring(minecraftBatSkinColorMode or "Default")
+        MinecraftBatColorSelector.Text = tostring(minecraftBatSkinColorMode or "Default") .. "  ▼"
     end
+    if KatanaColorSelector then
+        KatanaColorSelector.Text = tostring(katanaSkinColorMode or "Red") .. "  ▼"
+    end
+    pcall(function()
+        if KatanaSkin and KatanaSkin.SetColorMode and katanaSkinEnabled then
+            KatanaSkin.SetColorMode(katanaSkinColorMode or "Red")
+        end
+    end)
     pcall(function()
         if MinecraftBatSkin and MinecraftBatSkin.SetColorMode then
             MinecraftBatSkin.SetColorMode(minecraftBatSkinColorMode or "Default")
